@@ -18,7 +18,7 @@ window.RUF_CONFIG = {
   // 2) >>> THE ONLY LINE YOU NEED TO EDIT <<<
   //    The email address YOU will sign in with. This makes you the first Admin.
   //    Must match EXACTLY the email you put in firestore.rules (all lowercase).
-  ownerEmail: "talthunayan64@gmail.com",
+  ownerEmail: "talthunayan74@gmail.com",
 
   // 3) Company name shown in the sidebar and on client pages.
   companyName: "RUF",
