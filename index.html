@@ -15,11 +15,19 @@
       <div class="logo-sub" style="margin-bottom:22px;">Project Workspace</div>
       <div id="loginForm">
         <div class="fld">
-          <label>Your work email</label>
-          <input type="email" id="loginEmail" placeholder="name@company.com" onkeydown="if(event.key==='Enter'){app.sendLink()}"/>
+          <label>Work email</label>
+          <input type="email" id="loginEmail" placeholder="name@company.com" autocomplete="username" onkeydown="if(event.key==='Enter'){document.getElementById('loginPassword').focus()}"/>
         </div>
-        <button class="btn-primary np-create" onclick="app.sendLink()">Send me a sign-in link</button>
-        <div class="login-msg">No password needed. We'll email you a link — open it on this device and you're in.</div>
+        <div class="fld">
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter'){app.signIn()}"/>
+        </div>
+        <button class="btn-primary np-create" id="loginBtn" onclick="app.signIn()">Sign in</button>
+        <div class="login-links">
+          <span class="link" onclick="app.createPassword()">First time here? Create your password</span>
+          <span class="link" onclick="app.forgotPassword()">Forgot password?</span>
+        </div>
+        <div class="login-msg">Your email has to be on the team list first — an admin adds you from the Team tab.</div>
       </div>
       <div id="loginMsg" class="login-msg"></div>
     </div>
