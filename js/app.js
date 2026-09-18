@@ -140,24 +140,47 @@ window.app = (() => {
     $('loginWrap').classList.remove('hidden'); $('sidebar').classList.add('hidden'); $('main').classList.add('hidden');
     const m = $('loginMsg'); m.textContent = msg || ''; m.classList.toggle('err', !!err);
   }
-  async function sendLink() {
-    const email = ($('loginEmail').value || '').trim().toLowerCase();
-    if (!email || !email.includes('@')) { showLogin('Please enter a valid email address.', true); return; }
-    try {
-      await auth.sendSignInLinkToEmail(email, { url: publicUrl(), handleCodeInApp: true });
-      localStorage.setItem('ruf_email', email);
-      $('loginForm').classList.add('hidden');
-      showLogin('Link sent to ' + email + '. Open it on this device to sign in. (Check spam if it takes more than a minute.)');
-    } catch (e) { showLogin('Could not send the link: ' + e.message, true); }
-  }
   function publicUrl() { return CFG.publicUrl || (location.origin + location.pathname); }
-  async function completeLinkSignIn() {
-    if (!auth.isSignInWithEmailLink(location.href)) return;
-    let email = localStorage.getItem('ruf_email');
-    if (!email) email = window.prompt('Confirm your email to finish signing in');
-    if (!email) return;
-    try { await auth.signInWithEmailLink(email.trim().toLowerCase(), location.href); history.replaceState(null, '', location.pathname + (location.hash || '#/dashboard')); }
-    catch (e) { showLogin('Sign-in link problem: ' + e.message, true); }
+  function loginFields() {
+    const email = ($('loginEmail').value || '').trim().toLowerCase();
+    const pw = $('loginPassword').value || '';
+    return { email, pw };
+  }
+  function loginBusy(on) { const b = $('loginBtn'); if (b) { b.disabled = on; b.textContent = on ? 'Please wait…' : 'Sign in'; } }
+  function authMessage(e) {
+    const c = (e && e.code) || '';
+    if (c === 'auth/invalid-email') return 'That email address doesn\'t look right.';
+    if (c === 'auth/wrong-password' || c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials' || c === 'auth/user-not-found')
+      return 'Wrong password — or no password has been created for this email yet. First time here? Use "Create your password" below.';
+    if (c === 'auth/too-many-requests') return 'Too many attempts. Wait a few minutes and try again, or use "Forgot password".';
+    if (c === 'auth/email-already-in-use') return 'A password already exists for this email. Use Sign in, or "Forgot password" to reset it.';
+    if (c === 'auth/weak-password') return 'Please choose a longer password (at least 8 characters).';
+    if (c === 'auth/network-request-failed') return 'No internet connection. Check your network and try again.';
+    return 'Something went wrong: ' + ((e && e.message) || e);
+  }
+  async function signIn() {
+    const { email, pw } = loginFields();
+    if (!email.includes('@')) { showLogin('Please enter your work email.', true); return; }
+    if (!pw) { showLogin('Please enter your password.', true); return; }
+    loginBusy(true);
+    try { await auth.signInWithEmailAndPassword(email, pw); localStorage.setItem('ruf_email', email); showLogin(''); }
+    catch (e) { showLogin(authMessage(e), true); }
+    finally { loginBusy(false); }
+  }
+  async function createPassword() {
+    const { email, pw } = loginFields();
+    if (!email.includes('@')) { showLogin('Enter your work email first, then choose a password.', true); return; }
+    if (pw.length < 8) { showLogin('Type the password you want to use (at least 8 characters), then press "Create your password" again.', true); $('loginPassword').focus(); return; }
+    loginBusy(true);
+    try { await auth.createUserWithEmailAndPassword(email, pw); localStorage.setItem('ruf_email', email); showLogin(''); }
+    catch (e) { showLogin(authMessage(e), true); }
+    finally { loginBusy(false); }
+  }
+  async function forgotPassword() {
+    const { email } = loginFields();
+    if (!email.includes('@')) { showLogin('Enter your work email first, then press "Forgot password".', true); return; }
+    try { await auth.sendPasswordResetEmail(email, { url: publicUrl() }); showLogin('Reset email sent to ' + email + '. Open the link in it, choose a new password, then come back here and sign in. (Check spam if it takes more than a minute.)'); }
+    catch (e) { showLogin(authMessage(e), true); }
   }
   async function resolveMember(user) {
     const email = (user.email || '').toLowerCase();
@@ -181,7 +204,7 @@ window.app = (() => {
     if (!CFG.firebase || CFG.firebase.apiKey === 'PASTE_HERE') { showLogin('Setup needed: open js/config.js and paste your Firebase config (see SETUP.md).', true); return; }
     initFirebase();
     $('loginLogo').textContent = CFG.companyName || 'RUF'; $('sbLogo').textContent = CFG.companyName || 'RUF';
-    await completeLinkSignIn();
+    try { const remembered = localStorage.getItem('ruf_email'); if (remembered && $('loginEmail')) $('loginEmail').value = remembered; } catch (e) { }
     auth.onAuthStateChanged(async user => {
       if (!user) { showLogin(); return; }
       S.user = user;
@@ -377,7 +400,7 @@ window.app = (() => {
     toast, isAdmin, canSeeAll, canEditProject, myProjects,
     col, getAll, loadAll, reloadProjects, saveProject, logActivity, notify, updateBadge,
     db: () => db, storage: () => storage, auth: () => auth,
-    boot, sendLink, signOut, render, route,
+    boot, signIn, createPassword, forgotPassword, signOut, render, route,
     openDrawer, closeDrawer, openModal, closeModal, confirmBox,
     openDatePicker, dpMove, dpPick, dpToday, dpClear, dateField,
     stageTrack, stagePill, tglRow, tgl, tglValues, addToggle, segSet, segVal, segPick,
