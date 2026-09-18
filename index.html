@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUF — Project Workspace</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <!-- ===== LOGIN (shown until signed in) ===== -->
+  <div class="login-wrap" id="loginWrap">
+    <div class="login-card">
+      <div class="logo" id="loginLogo">RUF</div>
+      <div class="logo-sub" style="margin-bottom:22px;">Project Workspace</div>
+      <div id="loginForm">
+        <div class="fld">
+          <label>Your work email</label>
+          <input type="email" id="loginEmail" placeholder="name@company.com" onkeydown="if(event.key==='Enter'){app.sendLink()}"/>
+        </div>
+        <button class="btn-primary np-create" onclick="app.sendLink()">Send me a sign-in link</button>
+        <div class="login-msg">No password needed. We'll email you a link — open it on this device and you're in.</div>
+      </div>
+      <div id="loginMsg" class="login-msg"></div>
+    </div>
+  </div>
+
+  <!-- ===== APP (hidden until signed in) ===== -->
+  <div class="sidebar hidden" id="sidebar">
+    <div class="logo" id="sbLogo">RUF</div>
+    <div class="logo-sub">Project Workspace</div>
+
+    <div class="nav">
+      <a class="nav-item" href="#/dashboard" data-nav="dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Dashboard <span class="nav-badge hidden" id="navBadge">0</span>
+      </a>
+      <a class="nav-item" href="#/projects" data-nav="projects">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
+        Projects
+      </a>
+      <a class="nav-item" href="#/gantt" data-nav="gantt">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h10M3 12h14M3 18h8"/><path d="M13 6h8M17 12h4M11 18h10" stroke-opacity="0.35"/></svg>
+        Gantt chart
+      </a>
+      <a class="nav-item" href="#/calendar" data-nav="calendar">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>
+        Calendar
+      </a>
+      <a class="nav-item" href="#/team" data-nav="team">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3.5"/><path d="M2 21c0-4 3-6.5 7-6.5s7 2.5 7 6.5"/><circle cx="18" cy="8" r="2.5"/><path d="M22 21c0-3-1.8-5-4-5.5"/></svg>
+        Team
+      </a>
+    </div>
+
+    <a class="new-project-btn" id="newProjectBtn" href="#/new" style="text-decoration:none; display:block;">+ New project</a>
+
+    <div class="sidebar-footer">
+      <div class="me">
+        <div class="avatar" id="meAvatar">?</div>
+        <div>
+          <div class="me-name" id="meName">—</div>
+          <div class="me-role" id="meRole">—</div>
+        </div>
+      </div>
+      <div class="signout" onclick="app.signOut()">Sign out</div>
+    </div>
+  </div>
+
+  <div class="main hidden" id="main">
+    <div id="view"></div>
+  </div>
+
+  <!-- ===== Shared popups ===== -->
+  <div class="toast" id="toast"></div>
+
+  <div class="dp" id="datePicker">
+    <div class="dp-head">
+      <span class="dp-nav" onclick="app.dpMove(-1)">&lsaquo;</span>
+      <span class="dp-title" id="dpTitle"></span>
+      <span class="dp-nav" onclick="app.dpMove(1)">&rsaquo;</span>
+    </div>
+    <div class="dp-dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+    <div class="dp-grid" id="dpGrid"></div>
+    <div class="dp-foot">
+      <span class="dp-link" onclick="app.dpToday()">Today</span>
+      <span class="dp-link" onclick="app.dpClear()">Clear</span>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="app.closeDrawer()"></div>
+  <div class="drawer" id="drawer"></div>
+
+  <div class="modal-backdrop" id="modalBackdrop" onclick="app.closeModal()"></div>
+  <div class="modal" id="modal"></div>
+
+  <!-- Firebase (compat SDK — no build step needed) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/detail.js"></script>
+  <script src="js/team.js"></script>
+</body>
+</html>

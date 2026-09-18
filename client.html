@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your project</title>
+<link rel="stylesheet" href="css/app.css">
+<style>
+  body { display: block; }
+  .cp { max-width: 820px; margin: 0 auto; padding: 28px 18px 60px; }
+  .cp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .cp-brand { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
+  .cp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; }
+  .cp-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  .cp-file { display: flex; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .cp-file:first-of-type { border-top: none; }
+  .cp-thumb { width: 84px; height: 64px; border-radius: 8px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--faint); font-weight: 700; flex-shrink: 0; }
+  .cp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .cp-file-name { font-size: 14px; font-weight: 600; }
+  .cp-file-sub { font-size: 12px; color: var(--faint); margin-top: 2px; }
+  .cp-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .cp-sec { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+  .cp-sec:first-of-type { border-top: none; }
+  .cp-sec select, .cp-sec input, .cp textarea { width: 100%; height: 36px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-family: var(--font); font-size: 13.5px; color: var(--ink); background: var(--surface); }
+  .cp textarea { height: auto; padding: 8px 10px; }
+  .cp-sec .lab { font-size: 13px; font-weight: 700; }
+  .cp-foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 30px; }
+  .stage-tracker { min-width: 0; width: 100%; align-items: stretch; }
+  .ok-msg { background: #E9F1E9; color: #4C6B4F; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; font-weight: 600; margin-top: 12px; }
+  @media (max-width: 600px) { .cp-sec { grid-template-columns: 1fr; } .cp-actions { margin-left: 0; } }
+</style>
+</head>
+<body>
+  <div class="cp" id="cp"><div class="empty">Loading your project…</div></div>
+  <div class="toast" id="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+  (() => {
+    const CFG = window.RUF_CONFIG; firebase.initializeApp(CFG.firebase); const db = firebase.firestore();
+    const token = new URLSearchParams(location.search).get('t');
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const fmt = s => { if (!s) return '—'; const d = new Date(s.slice(0,10) + 'T00:00:00'); return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear(); };
+    const kwd = n => (Number(n) || 0).toLocaleString('en-KW', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' KWD';
+    const STAGES = ['Design','Review','Production','Install','Done'], STAGE_FULL = ['Design','Client review','Production','Installation','Complete'];
+    let P = null; const done = {};
+    let toastT; const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600); };
+
+    function track(idx) { return '<div class="stage-track">' + STAGES.map((s, i) => { const c = i < idx ? 'done' : i === idx ? 'current' : ''; return '<div class="stage-col ' + c + '"><div class="dot ' + c + '"></div><span>' + s + '</span></div>'; }).join('') + '</div>'; }
+
+    async function load() {
+      if (!token) { $('cp').innerHTML = '<div class="empty">This link is missing its code. Please ask for the link again.</div>'; return; }
+      const snap = await db.collection('portal').doc(token).get();
+      if (!snap.exists) { $('cp').innerHTML = '<div class="empty">This link is no longer valid. Please ask for a new one.</div>'; return; }
+      P = snap.data(); render();
+    }
+    function render() {
+      const idx = P.status === 'done' ? 5 : P.stage;
+      let h = '<div class="cp-head"><div><div class="cp-brand">' + esc(P.company) + '</div><div class="small">Project page for</div><div class="detail-title" style="font-size:20px;">' + esc(P.client) + '</div><div class="small">' + esc(P.products.join(' + ')) + (P.description ? ' · ' + esc(P.description) : '') + '</div></div></div>';
+      h += '<div class="cp-card"><div class="cp-title">Where your project is</div><div class="stage-tracker"><div class="stage-current-label">' + STAGE_FULL[Math.min(P.stage, 4)] + '</div>' + track(idx) + '</div></div>';
+
+      // files
+      const elev = P.files.filter(f => f.isElevation), other = P.files.filter(f => !f.isElevation);
+      if (elev.length) h += '<div class="cp-card"><div class="cp-title">Drawings for your approval</div><div class="small" style="margin-bottom:8px;">Open each one, then approve it or tell us what to change.</div>' + elev.map(f => fileRow(f, true)).join('') + '</div>';
+      if (other.length) h += '<div class="cp-card"><div class="cp-title">Files shared with you</div>' + other.map(f => fileRow(f, false)).join('') + '</div>';
+
+      // checklist
+      if (P.checklist) {
+        const c = P.checklist; const locked = !!c.teamConfirmedAt;
+        h += '<div class="cp-card"><div class="cp-title">What goes in each section?</div><div class="small" style="margin-bottom:10px;line-height:1.5;">Tell us what you need in each numbered section' + (c.deadline ? ' by <b>' + fmt(c.deadline) + '</b>' : '') + '. Pick an option or choose "Something else" and describe it. ' + (locked ? 'This checklist is now confirmed and in production.' : c.clientConfirmedAt ? 'You confirmed this on ' + fmt(c.clientConfirmedAt) + ' — you can still send corrections below.' : '') + '</div>';
+        h += c.sections.map((s, i) => '<div class="cp-sec"><div class="lab">' + esc(s.label) + '</div><div>' + (locked ? esc(s.choice || '—') : '<select id="cl_' + i + '" onchange="clPick(' + i + ')"><option value="">— choose —</option>' + c.options.map(o => '<option' + (s.choice === o && !s.custom ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '<option value="__custom"' + (s.custom ? ' selected' : '') + '>Something else…</option></select><input type="text" id="clc_' + i + '" style="margin-top:6px;' + (s.custom ? '' : 'display:none;') + '" placeholder="Describe what you\'d like here" value="' + esc(s.custom ? s.choice : '') + '"/>') + '</div><div>' + (locked ? '<span class="small">' + esc(s.note || '') + '</span>' : '<input type="text" id="cln_' + i + '" placeholder="Any note (optional)" value="' + esc(s.note || '') + '"/>') + '</div></div>').join('');
+        if (!locked) h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;"><button class="btn-secondary" onclick="sendChecklist(false)">Save my answers</button><button class="btn-primary" onclick="sendChecklist(true)">Confirm — I\'m happy with these</button></div><div class="small" style="margin-top:8px;">Confirming lets the workshop start production. After that, changes go through a change request.</div>';
+        if (done.checklist) h += '<div class="ok-msg">Thank you — your answers were sent to the team.</div>';
+        h += '</div>';
+      }
+
+      // quotation
+      if (P.quote) {
+        const q = P.quote, t = q.totals;
+        h += '<div class="cp-card"><div class="cp-title">Quotation ' + esc(q.number) + ' <span class="small">· version ' + q.version + ' · valid until ' + fmt(q.validUntil) + '</span></div>' + (q.note ? '<div style="font-size:13.5px;margin-bottom:10px;line-height:1.5;">' + esc(q.note) + '</div>' : '') +
+          '<div class="q-table"><div class="q-thead" style="grid-template-columns:1fr 60px 70px 110px;"><div>Description</div><div style="text-align:right">Qty</div><div>Unit</div><div style="text-align:right">Total</div></div>' + q.items.map(it => '<div class="q-row" style="grid-template-columns:1fr 60px 70px 110px;padding:10px 12px;"><div style="font-size:13px;">' + esc(it.desc) + '</div><div style="text-align:right;font-size:13px;">' + esc(it.qty) + '</div><div style="font-size:13px;">' + esc(it.unit) + '</div><div class="q-line-total">' + kwd((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)) + '</div></div>').join('') + '</div>' +
+          '<div class="np-summary-card" style="margin-top:12px;">' + (t.disc ? '<div class="np-sum-row" style="border-top:none;"><span>Subtotal</span><span>' + kwd(t.sub) + '</span></div><div class="np-sum-row"><span>Discount</span><span>− ' + kwd(t.disc) + '</span></div>' : '') + '<div class="np-sum-row q-total" style="' + (t.disc ? '' : 'border-top:none;') + '"><span>Total</span><span>' + kwd(t.total) + '</span></div><div class="np-sum-row"><span>Deposit (' + q.depositPct + '%) on approval</span><span>' + kwd(t.deposit) + '</span></div><div class="np-sum-row"><span>Balance ' + esc(q.balanceTerms.toLowerCase()) + '</span><span>' + kwd(t.total - t.deposit) + '</span></div></div>' +
+          '<div class="small" style="margin-top:12px;line-height:1.5;"><b>Included:</b> ' + esc(q.included) + '<br><b>Not included:</b> ' + esc(q.excluded) + '<br><b>Estimated duration:</b> ' + esc(q.duration) + '</div>';
+        if (q.status === 'accepted') h += '<div class="ok-msg">You accepted this quotation. Thank you!</div>';
+        else if (done.quote) h += '<div class="ok-msg">Thank you — your response was sent to the team.</div>';
+        else h += '<div style="margin-top:14px;"><textarea id="qComment" rows="2" placeholder="Anything you\'d like changed? (optional)"></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;"><button class="btn-secondary" onclick="quoteDecision(\'changes\')">Request changes</button><button class="btn-primary" onclick="quoteDecision(\'accepted\')">Accept quotation</button></div></div>';
+        h += '</div>';
+      }
+      h += '<div class="cp-foot">Questions? Reply to us on WhatsApp — this page updates as your project moves along.</div>';
+      $('cp').innerHTML = h;
+    }
+    function fileRow(f, approvable) {
+      const img = /\.(png|jpe?g|gif|webp)$/i.test(f.name);
+      const st = f.status === 'approved' ? 'You approved this' : f.status === 'declined' ? 'You asked for changes' : f.status === 'awaiting' ? 'Waiting for your approval' : '';
+      return '<div class="cp-file"><a class="cp-thumb" href="' + esc(f.url) + '" target="_blank" rel="noopener">' + (img ? '<img src="' + esc(f.url) + '" alt=""/>' : esc(f.name.split('.').pop().toUpperCase())) + '</a><div><div class="cp-file-name"><a href="' + esc(f.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">' + esc(f.name) + '</a></div><div class="cp-file-sub">' + esc(f.folder) + (st ? ' · ' + st : '') + '</div></div>' +
+        (approvable && f.status !== 'approved' && !done['f_' + f.id] ? '<div class="cp-actions"><button class="btn-secondary" style="height:32px;font-size:12.5px;" onclick="fileDecision(\'' + f.id + '\',\'declined\')">Ask for changes</button><button class="btn-primary" style="height:32px;font-size:12.5px;" onclick="fileDecision(\'' + f.id + '\',\'approved\')">Approve</button></div>' : (done['f_' + f.id] ? '<div class="cp-actions"><span class="cl-pill filled">Sent</span></div>' : '')) + '</div>';
+    }
+    async function respond(type, payload) {
+      await db.collection('portalResponses').add({ token, projectId: P.projectId, type, payload, at: new Date().toISOString(), handled: false });
+    }
+    window.clPick = i => { const s = $('cl_' + i).value; $('clc_' + i).style.display = s === '__custom' ? '' : 'none'; };
+    window.sendChecklist = async confirmed => {
+      const sections = P.checklist.sections.map((s, i) => { const sel = $('cl_' + i).value; const custom = sel === '__custom'; return { n: s.n, choice: custom ? $('clc_' + i).value.trim() : sel, custom, note: $('cln_' + i).value.trim() }; });
+      const empty = sections.filter(s => !s.choice).length;
+      if (confirmed && empty) { toast('Please fill in all sections before confirming (' + empty + ' left)'); return; }
+      try { await respond('checklist', { sections, confirmed }); done.checklist = true; if (confirmed) P.checklist.clientConfirmedAt = new Date().toISOString(); render(); toast(confirmed ? 'Confirmed — thank you!' : 'Saved and sent'); } catch (e) { toast('Could not send: ' + e.message); }
+    };
+    window.fileDecision = async (fileId, decision) => {
+      let comment = ''; if (decision === 'declined') { comment = window.prompt('What would you like changed?') || ''; }
+      try { await respond('elevation', { fileId, decision, comment }); done['f_' + fileId] = true; render(); toast(decision === 'approved' ? 'Approved — thank you!' : 'Sent to the team'); } catch (e) { toast('Could not send: ' + e.message); }
+    };
+    window.quoteDecision = async decision => {
+      const comment = ($('qComment').value || '').trim();
+      try { await respond('quote', { decision, comment }); done.quote = true; render(); toast(decision === 'accepted' ? 'Accepted — thank you!' : 'Sent to the team'); } catch (e) { toast('Could not send: ' + e.message); }
+    };
+    load().catch(e => { $('cp').innerHTML = '<div class="empty">Could not load: ' + esc(e.message) + '</div>'; });
+  })();
+  </script>
+</body>
+</html>
