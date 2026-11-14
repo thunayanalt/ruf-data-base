@@ -388,8 +388,9 @@
 
   .cal-header-row, .cal-row {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
+  .cal-cell { min-width: 0; }
 
   .cal-header-row div {
     padding: 14px 10px;
@@ -805,7 +806,7 @@
 
   /* ---------- Date picker ---------- */
   .date-wrap { position: relative; }
-  .date-wrap .date-input { cursor: pointer; padding-right: 36px; background: var(--surface); }
+  .date-wrap .date-input { cursor: pointer; width: 100%; height: 36px; border: 1px solid var(--border); border-radius: 8px; padding: 0 36px 0 12px; font-size: 13.5px; font-family: var(--font); color: var(--ink); background: var(--surface); }
   .date-ico {
     position: absolute; right: 12px; top: 50%;
     width: 16px; height: 16px;
@@ -1092,7 +1093,26 @@
   .list-sub { font-size: 12.5px; color: var(--faint); }
   .due-txt { color: var(--accent-progress); font-weight: 600; }
 
-  /* ---------- Daily digest ---------- */
+  /* ---------- splash / skeleton / version ---------- */
+.spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid #E4E0D8; border-top-color: #1D1918; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.sk-line, .sk-box { background: linear-gradient(90deg, #EEEBE4 25%, #F6F4EF 50%, #EEEBE4 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; border-radius: 8px; }
+.sk-line { height: 18px; } .sk-line.w40 { width: 40%; } .sk-line.w70 { width: 70%; }
+.sk-box { height: 110px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.app-version { font-size: 10.5px; color: var(--faint); margin-top: 8px; }
+.app-version a { color: var(--faint); text-decoration: none; }
+.app-version a:hover { color: var(--ink); text-decoration: underline; }
+@media (max-width: 768px) { .app-version { display: none; } }
+
+/* ---------- Google Calendar button ---------- */
+.gcal-btn { display: inline-flex; align-items: center; gap: 8px; }
+.gcal-btn .gdot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-done); }
+.gcal-btn .gdot.off { background: var(--border); }
+.gcal-btn.on { border-color: var(--accent-done); }
+
+/* ---------- Daily digest ---------- */
   .digest-card {
     background: var(--ink);
     color: #fff;
@@ -2106,7 +2126,7 @@
 .sched-card.production { border-top-color: var(--accent-progress); } .sched-card.install { border-top-color: var(--accent-done); }
 .sched-card .fld { margin-bottom: 10px; }
 
-.empty { border: 1px dashed var(--border); border-radius: 12px; padding: 34px 20px; text-align: center; color: var(--faint); font-size: 13px; background: #FBFAF7; }
+.empty:not(.cl-pill) { border: 1px dashed var(--border); border-radius: 12px; padding: 34px 20px; text-align: center; color: var(--faint); font-size: 13px; background: #FBFAF7; }
 .link { color: var(--accent-progress); cursor: pointer; font-weight: 600; }
 .link:hover { text-decoration: underline; }
 .danger-text { color: #9C3B3B; }
@@ -2121,8 +2141,8 @@
   body { background: #fff; }
 }
 
-
-/* PHONE LAYOUT (≤ 768px) — laptop/desktop above this is untouched
+/* =====================================================================
+   PHONE LAYOUT (≤ 768px) — laptop/desktop above this is untouched
    ===================================================================== */
 @media (max-width: 768px) {
   html, body { overflow-x: hidden; }
@@ -2202,12 +2222,14 @@
   .chip-row { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .chip { white-space: nowrap; flex-shrink: 0; }
   .dir-head { display: none; }
-  .dir-row { grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px 14px; }
-  .dir-project { grid-column: 1; }
-  .dir-desc { grid-column: 1 / -1; font-size: 12.5px; }
+  .dir-row { grid-template-columns: 1fr auto; grid-template-areas: "proj stage" "desc desc" "who when"; gap: 4px 10px; padding: 12px 14px; align-items: start; }
+  .dir-project { grid-area: proj; }
+  .dir-row > div:nth-child(3) { grid-area: stage; }
+  .dir-desc { grid-area: desc; font-size: 12.5px; }
+  .dir-assignee { grid-area: who; }
   .dir-assignee::before { content: "Assigned to "; color: var(--faint); }
   .dir-assignee, .dir-updated { font-size: 11.5px; }
-  .dir-updated { text-align: right; }
+  .dir-updated { grid-area: when; text-align: right; }
 
   /* ---- project detail ---- */
   .detail-header { flex-direction: column; align-items: stretch; gap: 14px; }
@@ -2224,6 +2246,8 @@
   .cl-head { display: none; }
   .cl-row { grid-template-columns: 1fr; gap: 6px; padding: 12px 14px; }
   .cl-sec { font-size: 14px; }
+  .cl-table + div { flex-wrap: wrap; }
+  .cl-table + div .date-wrap { width: 100% !important; }
   .sched-grid { grid-template-columns: 1fr; gap: 10px; }
   .pg-toolbar { flex-direction: column; align-items: flex-start; gap: 6px; }
   .pg-left { width: 150px; }
@@ -2233,6 +2257,7 @@
   .np-layout, .q-layout, .cal-layout { grid-template-columns: 1fr; gap: 14px; }
   .np-side, .q-side { position: static; }
   .np-card { padding: 16px 16px 4px; }
+  .np-card .fld textarea { min-height: 84px; }
   .toggle-row { gap: 6px; }
   .tgl { padding: 7px 11px; font-size: 12.5px; }
   .add-row { flex-direction: column; }
@@ -2251,7 +2276,8 @@
   .g-label { padding: 10px 10px; }
   .g-name { font-size: 12.5px; }
   .g-sub { font-size: 11px; }
-  .g-bar span { font-size: 10.5px; }
+  .g-bar span { display: none; }
+  .g-bar { padding: 0; }
   .g-week { font-size: 10.5px; padding-left: 4px; }
   .g-month { font-size: 11px; padding-left: 6px; }
   .g-none { font-size: 11px; }
@@ -2260,7 +2286,11 @@
   .cal-header-row div { padding: 8px 2px; font-size: 10px; letter-spacing: 0; }
   .cal-cell { min-height: 62px; padding: 4px 3px; font-size: 12px; }
   .cal-today-num { width: 22px; height: 22px; font-size: 11.5px; }
-  .cal-dot-event { font-size: 9.5px; padding: 3px 4px; margin-top: 3px; border-radius: 4px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-grid { overflow: hidden; }
+  .cal-cell { min-height: 56px; overflow: hidden; }
+  .cal-dot-event { font-size: 0; height: 7px; padding: 0; margin-top: 4px; border-left: none; border-radius: 4px; background: var(--accent-progress); }
+  .cal-dot-event.wait { background: var(--accent-wait); }
+  .cal-dot-event::before { content: none; }
   .cal-legend { flex-wrap: wrap; gap: 8px 14px; }
   .cal-sync { margin-left: 0; }
   .cal-nav { height: 32px; }
