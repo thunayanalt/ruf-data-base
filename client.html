@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Your project</title>
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/app.css?v=2026.11.13">
 <style>
   body { display: block; }
   .cp { max-width: 820px; margin: 0 auto; padding: 28px 18px 60px; }
@@ -27,7 +27,15 @@
   .cp-foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 30px; }
   .stage-tracker { min-width: 0; width: 100%; align-items: stretch; }
   .ok-msg { background: #E9F1E9; color: #4C6B4F; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; font-weight: 600; margin-top: 12px; }
-  @media (max-width: 600px) { .cp-sec { grid-template-columns: 1fr; } .cp-actions { margin-left: 0; } }
+  @media (max-width: 600px) {
+    .cp-sec { grid-template-columns: 1fr; } .cp-actions { margin-left: 0; }
+    .q-thead { display: none; }
+    .q-row { grid-template-columns: auto auto 1fr !important; gap: 4px 10px; }
+    .q-row > div:first-child { grid-column: 1 / -1; font-weight: 600; }
+    .q-row > div:nth-child(2) { text-align: left !important; color: var(--muted); }
+    .q-row > div:nth-child(3) { color: var(--muted); }
+    .stage-col span { font-size: 9.5px; }
+  }
 </style>
 </head>
 <body>
@@ -36,7 +44,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="js/config.js"></script>
+  <script src="js/config.js?v=2026.11.13"></script>
   <script>
   (() => {
     const CFG = window.RUF_CONFIG; firebase.initializeApp(CFG.firebase); const db = firebase.firestore();

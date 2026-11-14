@@ -4,12 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RUF — Project Workspace</title>
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/app.css?v=2026.11.13">
 </head>
 <body>
 
-  <!-- ===== LOGIN (shown until signed in) ===== -->
-  <div class="login-wrap" id="loginWrap">
+  <!-- ===== SPLASH (shown until we know whether you're signed in) ===== -->
+  <div id="splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#F6F4EF;z-index:1000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;">
+    <div style="font-size:26px;font-weight:700;letter-spacing:0.02em;color:#1D1918;">RUF</div>
+    <div class="spinner"></div>
+    <div id="splashText" style="font-size:13px;color:#8B8680;">Loading…</div>
+  </div>
+
+  <!-- ===== LOGIN (shown only when signed out) ===== -->
+  <div class="login-wrap hidden" id="loginWrap">
     <div class="login-card">
       <div class="logo" id="loginLogo">RUF</div>
       <div class="logo-sub" style="margin-bottom:22px;">Project Workspace</div>
@@ -29,7 +36,9 @@
         </div>
         <div class="login-msg">Your email has to be on the team list first — an admin adds you from the Team tab.</div>
       </div>
+      <div id="loginLoading" class="login-msg hidden">Loading your workspace…</div>
       <div id="loginMsg" class="login-msg"></div>
+      <button id="loginRetry" class="btn-secondary np-cancel hidden" style="margin-top:12px;">Try again</button>
     </div>
   </div>
 
@@ -72,6 +81,7 @@
         </div>
       </div>
       <div class="signout" onclick="app.signOut()">Sign out</div>
+      <div class="app-version"><span id="appVersion"></span> · <a href="#/diagnostics">diagnostics</a></div>
     </div>
   </div>
 
@@ -108,10 +118,20 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
-  <script src="js/config.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/views.js"></script>
-  <script src="js/detail.js"></script>
-  <script src="js/team.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="js/config.js?v=2026.11.13"></script>
+  <script src="js/app.js?v=2026.11.13"></script>
+  <script src="js/views.js?v=2026.11.13"></script>
+  <script src="js/detail.js?v=2026.11.13"></script>
+  <script src="js/team.js?v=2026.11.13"></script>
+  <script>
+    // Last resort: if a script failed to load (blocked CDN, broken upload) the app never boots — say so instead of spinning forever.
+    setTimeout(function () {
+      var s = document.getElementById('splash');
+      if (s && !s.classList.contains('hidden') && (!window.app || !window.firebase)) {
+        document.getElementById('splashText').innerHTML = 'The app could not load (' + (window.firebase ? 'app files' : 'Firebase scripts') + ' blocked or missing). <a href="#" onclick="location.reload();return false;" style="color:#1D1918;">Reload</a>';
+      }
+    }, 20000);
+  </script>
 </body>
 </html>
