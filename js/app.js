@@ -4,7 +4,7 @@
    ============================================================ */
 window.app = (() => {
   const CFG = window.RUF_CONFIG || {};
-  const APP_VERSION = '2026.11.16';
+  const APP_VERSION = '2026.11.16b';
 
   // ---------- diagnostics (small ring buffer in localStorage; shown at #/diagnostics) ----------
   const T0 = performance.now();
@@ -138,30 +138,47 @@ window.app = (() => {
   }
   async function reloadProjects() { S.projects = (await getAll('projects')).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')); }
 
-  async function saveProject(p, patch) {
+  // ---- "local first" saves ----
+  // The screen updates immediately; the write goes to Firestore in the background (it is queued locally even when
+  // offline and sent in order). If the server rejects it, the user gets a toast and the diagnostics log an entry.
+  let pendingSaves = 0;
+  function bg(promise, what) {
+    pendingSaves++; updateSaving();
+    return promise.then(() => { pendingSaves--; updateSaving(); return true; }, e => {
+      pendingSaves--; updateSaving();
+      dlog('save-failed', what + ' · ' + (e && (e.code || e.message)));
+      toast('Could not save ' + what + ' — ' + (navigator.onLine ? (e && e.code === 'permission-denied' ? 'no permission' : 'please try again') : 'you are offline'));
+      return false;
+    });
+  }
+  function updateSaving() { const el = $('savingDot'); if (el) el.classList.toggle('on', pendingSaves > 0); }
+  window.addEventListener('beforeunload', e => { if (pendingSaves > 0 && !navigator.onLine) { e.preventDefault(); e.returnValue = ''; } });
+
+  function saveProject(p, patch) {
     patch.updatedAt = nowISO();
-    await col('projects').doc(p.id).update(patch);
     Object.assign(p, patch);
     const inList = S.projects.find(x => x.id === p.id);
     if (inList && inList !== p) Object.assign(inList, patch);
+    return bg(col('projects').doc(p.id).update(patch), 'project changes');
   }
-  async function logActivity(p, text, type) {
+  function logActivity(p, text, type) {
     const entry = { text, by: S.me.email, at: nowISO(), type: type || 'info' };
-    await col('projects').doc(p.id).collection('activity').add(entry);
     if (S.detail.project && S.detail.project.id === p.id) S.detail.activity.unshift({ id: uid(), ...entry });
-    await col('projects').doc(p.id).update({ lastActivity: text, lastActivityAt: entry.at });
     p.lastActivity = text; p.lastActivityAt = entry.at;
+    bg(Promise.all([col('projects').doc(p.id).collection('activity').add(entry), col('projects').doc(p.id).update({ lastActivity: text, lastActivityAt: entry.at })]), 'activity');
+    return Promise.resolve();
   }
-  async function notify(emails, text, projectId, type) {
+  function notify(emails, text, projectId, type) {
     const list = [...new Set(emails.filter(Boolean))];
-    if (!list.length) return;
+    if (!list.length) return Promise.resolve();
     const batch = db.batch();
     list.forEach(e => batch.set(col('notifications').doc(), { to: e, text, projectId: projectId || null, type: type || 'info', read: false, at: nowISO() }));
-    await batch.commit();
+    bg(batch.commit(), 'notifications');
     if (CFG.n8nWebhookUrl) {
       const to = list.map(e => S.members.find(m => m.email === e)).filter(Boolean).map(m => ({ name: m.name, phone: m.phone || '', email: m.email, channels: m.notify || {} }));
       fetch(CFG.n8nWebhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: type || 'notification', to, text, projectId: projectId || null }) }).catch(() => {});
     }
+    return Promise.resolve();
   }
   function updateBadge() {
     const n = S.notifs.filter(x => !x.read).length + dueCheckups().length;
@@ -557,7 +574,7 @@ window.app = (() => {
     S, CFG, STAGES, STAGE_FULL, PHASES, PHASE_LABEL, PHASE_SHARE, MONTHS, MONTHS_LONG, DAYS_LONG, DAY_LETTERS, DEFAULT_FOLDERS, CHECKLIST_OPTIONS,
     $, esc, attr, today, d0, iso, addDays, addMonths, dayDiff, fmt, fmtLong, fmtDate, nowISO, ago, uid, weekKey, kwd, initials, memberName, firstName, pcOf, cap,
     toast, isAdmin, canSeeAll, canEditProject, myProjects,
-    col, getAll, loadAll, reloadProjects, saveProject, logActivity, notify, updateBadge,
+    col, getAll, loadAll, reloadProjects, saveProject, logActivity, notify, updateBadge, bg,
     db: () => db, storage: () => storage, auth: () => auth,
     boot, signIn, createPassword, forgotPassword, signOut, render, route,
     openDrawer, closeDrawer, openModal, closeModal, confirmBox,

@@ -19,13 +19,24 @@
     if (!D.project || D.project.id !== id) {
       const p = listed;
       if (!p || !A.canEditProject(p) && !A.canSeeAll()) { $('view').innerHTML = '<div class="empty">Project not found or not assigned to you. <span class="link" onclick="location.hash=\'#/projects\'">Back to projects</span></div>'; return; }
-      const [files, act] = await Promise.all([
-        A.col('projects').doc(id).collection('files').get().then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))),
-        A.col('projects').doc(id).collection('activity').orderBy('at', 'desc').limit(200).get().then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))),
-      ]);
+      // Cache first (instant on a repeat visit), then the server copy in the background.
+      const filesQ = A.col('projects').doc(id).collection('files');
+      const actQ = A.col('projects').doc(id).collection('activity').orderBy('at', 'desc').limit(200);
+      const rows = s => s.docs.map(d => ({ id: d.id, ...d.data() }));
+      const fromCache = async q => { try { const s = await q.get({ source: 'cache' }); return s.empty ? null : s; } catch (e) { return null; } };
+      let [fs, as] = await Promise.all([fromCache(filesQ), fromCache(actQ)]);
+      const usedCache = !!(fs && as);
+      if (!fs || !as) [fs, as] = await Promise.all([fs || filesQ.get(), as || actQ.get()]);
       // keep what we loaded even if the user moved on — the project opens instantly when they come back
       D.project = p; D.folder = null; D.file = null;
-      D.files = files.sort((a, b) => (a.name || '').localeCompare(b.name || '')); D.activity = act;
+      D.files = rows(fs).sort((a, b) => (a.name || '').localeCompare(b.name || '')); D.activity = rows(as);
+      if (usedCache) Promise.all([filesQ.get(), actQ.get()]).then(([f2, a2]) => {
+        if (!D.project || D.project.id !== id) return;
+        const nf = rows(f2).sort((a, b) => (a.name || '').localeCompare(b.name || '')), na = rows(a2);
+        if (JSON.stringify(nf) === JSON.stringify(D.files) && JSON.stringify(na) === JSON.stringify(D.activity)) return;
+        D.files = nf; D.activity = na;
+        if (new RegExp('^#/project/' + id + '(/|$)').test(location.hash)) refresh();
+      }).catch(e => A.dlog('detail', 'background refresh failed ' + (e.code || e.message)));
     }
     if (!current()) return;
     D.tab = sub || 'files';
@@ -184,36 +195,36 @@
   async function addComment() {
     const x = D.files.find(f => f.id === D.file), p = project(); if (!x) return;
     const ta = $('cmText'), text = (ta.value || '').trim(); if (!text) { ta.focus(); return; }
-    const btn = $('cmBtn'); btn.disabled = true; btn.textContent = 'Posting…';
     const c = { id: 'c' + A.uid(), by: S.me.email, at: A.nowISO(), text: text.slice(0, 2000) };
     const key = seenKey(S.me.email);
-    try {
-      await A.col('projects').doc(p.id).collection('files').doc(x.id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c), lastCommentAt: c.at, lastCommentBy: c.by, ['seen.' + key]: c.at });
-    } catch (e) { btn.disabled = false; btn.textContent = 'Comment'; A.toast('Could not post the comment — ' + (e.code || e.message)); return; }
-    if (!commentsOf(x).some(z => z.id === c.id)) x.comments = commentsOf(x).concat([c]); x.lastCommentAt = c.at; x.lastCommentBy = c.by; x.seen = Object.assign({}, x.seen || {}, { [key]: c.at });
-    await A.logActivity(p, A.firstName(S.me.email) + ' commented on ' + x.name + ': “' + (text.length > 60 ? text.slice(0, 60) + '…' : text) + '”', 'file');
+    // show it immediately; the write follows in the background (and is undone on the screen if the server refuses it)
     const others = [...new Set((p.assigned || []).concat([x.uploadedBy]).concat(commentsOf(x).map(z => z.by)))].filter(e => e && e !== S.me.email);
-    await A.notify(others, A.firstName(S.me.email) + ' commented on ' + x.name + ' (' + p.client + ')', p.id, 'comment');
-    refresh();
-    setTimeout(() => { const l = $('cmList'); if (l) l.scrollTop = l.scrollHeight; }, 30);
+    x.comments = commentsOf(x).concat([c]); x.lastCommentAt = c.at; x.lastCommentBy = c.by; x.seen = Object.assign({}, x.seen || {}, { [key]: c.at });
+    refresh(); setTimeout(() => { const l = $('cmList'); if (l) l.scrollTop = l.scrollHeight; }, 30);
+    A.bg(A.col('projects').doc(p.id).collection('files').doc(x.id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c), lastCommentAt: c.at, lastCommentBy: c.by, ['seen.' + key]: c.at }), 'comment')
+      .then(ok => {
+        if (!ok) { x.comments = commentsOf(x).filter(z => z.id !== c.id); const last = x.comments[x.comments.length - 1]; x.lastCommentAt = last ? last.at : null; x.lastCommentBy = last ? last.by : null; if (D.file === x.id) { refresh(); const t = $('cmText'); if (t) t.value = text; } return; }
+        A.logActivity(p, A.firstName(S.me.email) + ' commented on ' + x.name + ': “' + (text.length > 60 ? text.slice(0, 60) + '…' : text) + '”', 'file');
+        A.notify(others, A.firstName(S.me.email) + ' commented on ' + x.name + ' (' + p.client + ')', p.id, 'comment');
+      });
   }
   function deleteComment(fileId, cid) {
     const x = D.files.find(f => f.id === fileId), c = commentsOf(x).find(z => z.id === cid); if (!c) return;
-    A.confirmBox('Delete this comment?', '“' + (c.text.length > 80 ? c.text.slice(0, 80) + '…' : c.text) + '”', 'Delete', async () => {
-      await A.col('projects').doc(project().id).collection('files').doc(x.id).update({ comments: firebase.firestore.FieldValue.arrayRemove(c) });
+    A.confirmBox('Delete this comment?', '“' + (c.text.length > 80 ? c.text.slice(0, 80) + '…' : c.text) + '”', 'Delete', () => {
       x.comments = commentsOf(x).filter(z => z.id !== cid);
       const last = x.comments[x.comments.length - 1];
-      await A.col('projects').doc(project().id).collection('files').doc(x.id).update({ lastCommentAt: last ? last.at : null, lastCommentBy: last ? last.by : null });
       x.lastCommentAt = last ? last.at : null; x.lastCommentBy = last ? last.by : null;
       refresh();
+      A.bg(A.col('projects').doc(project().id).collection('files').doc(x.id).update({ comments: firebase.firestore.FieldValue.arrayRemove(c), lastCommentAt: x.lastCommentAt, lastCommentBy: x.lastCommentBy }), 'comment delete');
     }, true);
   }
-  async function publishFile(id, on) {
+  function publishFile(id, on) {
     const x = D.files.find(f => f.id === id); const p = project(); if (!x || !!x.shared === !!on) return;
     const patch = { shared: !!on, sharedAt: on ? A.nowISO() : null };
-    await A.col('projects').doc(p.id).collection('files').doc(id).update(patch); Object.assign(x, patch);
-    await A.logActivity(p, x.name + (on ? ' published to the client portal' : ' removed from the client portal'), 'file');
-    await syncPortal(p); refresh(); A.toast(on ? 'Published — the client can now see it' : 'Unpublished');
+    Object.assign(x, patch); refresh(); A.toast(on ? 'Published — the client can now see it' : 'Unpublished');
+    A.bg(A.col('projects').doc(p.id).collection('files').doc(id).update(patch), on ? 'publish' : 'unpublish');
+    A.logActivity(p, x.name + (on ? ' published to the client portal' : ' removed from the client portal'), 'file');
+    syncPortal(p);
   }
   function startNewFolder() { $('addFolderCard').classList.add('hidden'); $('newFolderForm').classList.remove('hidden'); setTimeout(() => { const el = $('newFolderName'); if (el) el.focus(); }, 50); }
   function cancelNewFolder() { $('newFolderForm').classList.add('hidden'); $('addFolderCard').classList.remove('hidden'); }
@@ -246,21 +257,23 @@
     await A.logActivity(p, files.length === 1 ? 'Uploaded ' + files[0].name : 'Uploaded ' + files.length + ' files', 'file');
     A.toast('Upload complete'); refresh();
   }
-  async function removeFileDoc(x) {
-    try { await A.storage().ref(x.path).delete(); } catch (e) { /* already gone */ }
-    await A.col('projects').doc(project().id).collection('files').doc(x.id).delete();
+  function removeFileDoc(x) {
     D.files = D.files.filter(f => f.id !== x.id);
+    A.bg(A.col('projects').doc(project().id).collection('files').doc(x.id).delete(), 'file delete');
+    A.storage().ref(x.path).delete().catch(() => { /* already gone */ });
+    return Promise.resolve();
   }
   function deleteFile(id) {
     const x = D.files.find(f => f.id === id);
     A.confirmBox('Delete "' + x.name + '"?', 'This cannot be undone.', 'Delete', async () => { await removeFileDoc(x); if (D.file === id) D.file = null; await A.logActivity(project(), 'Deleted ' + x.name, 'file'); await syncPortal(project()); refresh(); }, true);
   }
-  async function setFileStatus(id, status) {
-    const x = D.files.find(f => f.id === id); const p = project();
+  function setFileStatus(id, status) {
+    const x = D.files.find(f => f.id === id); const p = project(); if (!x) return;
     const s = x.status === status ? null : status;
-    await A.col('projects').doc(p.id).collection('files').doc(id).update({ status: s }); x.status = s;
-    await A.logActivity(p, x.name + (s === 'approved' ? ' marked approved' : s === 'awaiting' ? ' awaiting client approval' : ' status cleared'), 'file');
-    await syncPortal(p); refresh();
+    x.status = s; refresh();   // screen first, server in the background
+    A.bg(A.col('projects').doc(p.id).collection('files').doc(id).update({ status: s }), 'file status');
+    A.logActivity(p, x.name + (s === 'approved' ? ' marked approved' : s === 'awaiting' ? ' awaiting client approval' : ' status cleared'), 'file');
+    syncPortal(p);
   }
   const toggleShare = id => { const x = D.files.find(f => f.id === id); return x ? publishFile(id, !x.shared) : null; };
 
@@ -529,8 +542,8 @@
   //  CLIENT PORTAL SYNC
   // ============================================================
   function portalLink(p) { const base = A.publicUrl().replace(/index\.html$/, ''); return base + (base.endsWith('/') ? '' : '/') + 'client.html?t=' + p.portalToken; }
-  async function syncPortal(p) {
-    if (!p.portalToken) return;
+  function syncPortal(p) {
+    if (!p.portalToken) return Promise.resolve();
     const q = p.quote && p.quote.status !== 'draft' ? { number: p.quote.number, version: p.quote.version, status: p.quote.status, validUntil: p.quote.validUntil, duration: p.quote.duration, items: p.quote.items, discount: p.quote.discount, depositPct: p.quote.depositPct, balanceTerms: p.quote.balanceTerms, included: p.quote.included, excluded: p.quote.excluded, note: p.quote.note || '', totals: qTotals(p.quote) } : null;
     const snap = {
       projectId: p.id, company: A.CFG.companyName || 'RUF', client: p.client, products: p.products || [], description: p.description || '', stage: p.status === 'done' ? 4 : (p.stage || 0), status: p.status,
@@ -538,7 +551,7 @@
       checklist: p.checklist && p.checklist.sentAt ? { sections: p.checklist.sections, options: p.checklist.options || A.CHECKLIST_OPTIONS, deadline: p.checklist.deadline, clientConfirmedAt: p.checklist.clientConfirmedAt, teamConfirmedAt: p.checklist.teamConfirmedAt } : null,
       quote: q, updatedAt: A.nowISO(),
     };
-    await A.col('portal').doc(p.portalToken).set(snap);
+    return A.bg(A.col('portal').doc(p.portalToken).set(snap), 'client portal');
   }
   function shareLinkModal(title, text) {
     const p = project(), link = portalLink(p);
