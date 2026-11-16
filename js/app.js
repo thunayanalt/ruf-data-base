@@ -4,7 +4,7 @@
    ============================================================ */
 window.app = (() => {
   const CFG = window.RUF_CONFIG || {};
-  const APP_VERSION = '2026.11.16c';
+  const APP_VERSION = '2026.11.17';
 
   // ---------- diagnostics (small ring buffer in localStorage; shown at #/diagnostics) ----------
   const T0 = performance.now();
@@ -377,10 +377,10 @@ window.app = (() => {
   function closeDrawer() { $('drawer').classList.remove('open'); $('drawerBackdrop').classList.remove('open'); }
   function openModal(html) { $('modal').innerHTML = html; $('modal').classList.add('open'); $('modalBackdrop').classList.add('open'); }
   function closeModal() { $('modal').classList.remove('open'); $('modalBackdrop').classList.remove('open'); }
-  function confirmBox(title, text, okLabel, onOk, danger) {
+  function confirmBox(title, text, okLabel, onOk, danger, cancelLabel) {
     openModal('<div class="drawer-head"><div class="member-name">' + esc(title) + '</div></div>' +
       '<div class="drawer-body"><div style="font-size:13.5px;color:var(--muted);line-height:1.5;">' + text + '</div></div>' +
-      '<div class="drawer-foot"><button class="btn-secondary" onclick="app.closeModal()">Cancel</button>' +
+      '<div class="drawer-foot"><button class="btn-secondary" id="confirmCancel" onclick="app.closeModal()">' + esc(cancelLabel || 'Cancel') + '</button>' +
       '<button class="btn-primary' + (danger ? ' danger-btn' : '') + '" id="confirmOk">' + esc(okLabel) + '</button></div>');
     $('confirmOk').onclick = async () => { closeModal(); await onOk(); };
   }

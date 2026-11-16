@@ -304,8 +304,9 @@
     let html = '<div class="cl-status"><div><div class="cl-status-title">' + esc(status) + '</div><div class="cl-status-sub">' + esc(sub) + '</div></div><div class="cl-actions">' +
       (edit && !c.teamConfirmedAt ? '<button class="btn-secondary" onclick="app.V.saveChecklist()">Save</button>' : '') +
       (edit && !c.teamConfirmedAt ? '<button class="btn-secondary" onclick="app.V.sendChecklist()">' + (c.sentAt ? 'Send reminder' : 'Send to client') + '</button>' : '') +
-      (edit && !c.teamConfirmedAt ? '<button class="btn-primary"' + (canConfirm ? '' : ' disabled') + ' onclick="app.V.confirmChecklist()">Confirm &amp; start production</button>' : '') + '</div></div>' +
-      '<div class="cl-note">Production can only start once the client confirms (an admin can confirm on their behalf after a call). Confirming freezes the choices.</div>';
+      (edit && !c.teamConfirmedAt ? '<button class="btn-primary"' + (canConfirm ? '' : ' disabled') + ' onclick="app.V.confirmChecklist()">Confirm &amp; start production</button>' : '') +
+      (A.canSeeAll() ? '<button class="btn-secondary danger" id="clCancelBtn" onclick="app.V.cancelChecklist()">Cancel checklist</button>' : '') + '</div></div>' +
+      '<div class="cl-note">Production can only start once the client confirms (an admin can confirm on their behalf after a call). Confirming freezes the choices.' + (A.canSeeAll() ? ' Cancelling removes the checklist completely (admin or manager only).' : '') + '</div>';
     const locked = c.teamConfirmedAt || !edit;
     const opts = (c.options || A.CHECKLIST_OPTIONS);
     html += '<div class="cl-table"><div class="cl-head"><div>Section</div><div>Client\'s choice</div><div>Note</div><div>Status</div></div>' + c.sections.map((s, i) =>
@@ -348,6 +349,25 @@
       await A.notify((p.assigned || []).filter(e => e !== S.me.email), p.client + ': checklist confirmed, production started', p.id, 'stage');
       await syncPortal(p); refresh();
     });
+  }
+  // admin / manager only: remove the checklist completely (and from the client's page)
+  function cancelChecklist() {
+    const p = project(), c = p.checklist; if (!c) return;
+    if (!A.canSeeAll()) { A.toast('Only an admin or manager can cancel a checklist'); return; }
+    const filled = c.sections.filter(s => s.choice).length;
+    const what = c.teamConfirmedAt ? 'This checklist was <b>confirmed and production has started</b>. '
+      : c.clientConfirmedAt ? 'The client has <b>already confirmed</b> this checklist. '
+        : c.sentAt ? 'This checklist was <b>sent to the client</b>' + (filled ? ' and ' + filled + ' of ' + c.sections.length + ' sections are filled in' : '') + '. ' : (filled ? filled + ' of ' + c.sections.length + ' sections are filled in. ' : '');
+    A.confirmBox('Cancel this checklist?', what + 'Cancelling deletes all ' + c.sections.length + ' sections and their answers, removes it from the client\'s page, and cannot be undone. You can create a new checklist afterwards.', 'Yes, cancel checklist', async () => {
+      const wasWaiting = /checklist/i.test(p.waiting || '');
+      // local first, then the background save — same pattern as the other actions
+      p.checklist = null;
+      if (wasWaiting) { p.waiting = null; p.waitingSince = null; }
+      refresh(); A.toast('Checklist cancelled');
+      A.saveProject(p, Object.assign({ checklist: null }, wasWaiting ? { waiting: null, waitingSince: null } : {}));
+      A.logActivity(p, 'Checklist cancelled by ' + A.firstName(S.me.email), 'checklist');
+      syncPortal(p);
+    }, true, 'Keep checklist');
   }
 
   // ============================================================
@@ -573,6 +593,6 @@
   }
 
   Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile, videoFailed,
-    createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, applyResponse, dismissResponse, phaseChanged, toggleGroup, renderProjectGantt,
+    createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, cancelChecklist, applyResponse, dismissResponse, phaseChanged, toggleGroup, renderProjectGantt,
     qSet, qValid, qItem, qAdd, qRemove, qCalc, qSave, qSend, qNewVersion, qPrint, saveSettings, newPortalLink, deleteProject, reopenProject, syncPortal, portalLink });
 })();
