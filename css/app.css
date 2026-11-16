@@ -2332,6 +2332,25 @@
 .fv-filetype { text-align: center; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .fv-ext { font-size: 22px; font-weight: 700; color: var(--faint); letter-spacing: .06em; }
 .fv-filetype a.btn-secondary { text-decoration: none; display: inline-block; }
+/* inline video player */
+.fv-preview.is-video { background: #141211; border-color: #141211; align-items: stretch; }
+.fv-video-wrap { width: 100%; display: flex; flex-direction: column; }
+.fv-video { width: 100%; max-height: 70vh; min-height: 220px; display: block; background: #141211; outline: none; }
+.fv-video-fallback { text-align: center; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; color: #D8D3CB; }
+.fv-video-fallback .fv-ext { color: #8B8680; }
+.fv-video-fallback .small { color: #B8B2A9; }
+.fv-video-fallback a.btn-secondary { text-decoration: none; display: inline-block; }
+.fv-video-foot { padding: 8px 12px; font-size: 12px; text-align: right; background: #1E1B19; }
+.fv-video-foot .link { color: #B8B2A9; }
+.file-thumb.video { background: #2A2624; color: #D8D3CB; gap: 6px; letter-spacing: .06em; }
+.file-thumb.video .play-icon { width: 22px; height: 22px; background: rgba(255,255,255,.14); border-radius: 50%; padding: 4px; }
+.file-thumb.video .play-icon path { transform: translateX(1px); }
+/* client portal player */
+.cp-thumb.video { background: #2A2624; color: #D8D3CB; gap: 5px; cursor: pointer; letter-spacing: .06em; }
+.cp-thumb.video .play-icon { width: 20px; height: 20px; background: rgba(255,255,255,.14); border-radius: 50%; padding: 4px; }
+.cp-player { width: 100%; margin: 4px 0 6px; }
+.cp-player video { width: 100%; max-height: 60vh; display: block; background: #141211; border-radius: 10px; outline: none; }
+.cp-player .small { margin-top: 6px; }
 .fv-side { min-width: 0; }
 .fv-title { font-size: 17px; font-weight: 700; word-break: break-word; margin-bottom: 4px; }
 .fv-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
