@@ -24,7 +24,7 @@
         A.col('projects').doc(id).collection('activity').orderBy('at', 'desc').limit(200).get().then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))),
       ]);
       // keep what we loaded even if the user moved on — the project opens instantly when they come back
-      D.project = p; D.folder = null;
+      D.project = p; D.folder = null; D.file = null;
       D.files = files.sort((a, b) => (a.name || '').localeCompare(b.name || '')); D.activity = act;
     }
     if (!current()) return;
@@ -85,15 +85,28 @@
   // ============================================================
   //  FILES
   // ============================================================
+  // ---- comments: stored on the file document (comments[], lastCommentAt/By, seen{memberKey: iso}) ----
+  const seenKey = email => String(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const commentsOf = x => Array.isArray(x.comments) ? x.comments : [];
+  const hasUnread = x => !!(x.lastCommentAt && x.lastCommentBy !== S.me.email && (!(x.seen && x.seen[seenKey(S.me.email)]) || x.seen[seenKey(S.me.email)] < x.lastCommentAt));
+  const COMMENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.5-4.5A8 8 0 1 1 21 12z"/></svg>';
+  function commentBadge(x) {
+    const n = commentsOf(x).length; if (!n) return '';
+    const unread = hasUnread(x);
+    return '<span class="fc-badge' + (unread ? ' new' : '') + '" title="' + n + (n === 1 ? ' comment' : ' comments') + (unread ? ' · new' : '') + '">' + COMMENT_ICON + n + '</span>';
+  }
+
   function tabFiles() {
     const p = project(), edit = A.canEditProject(p);
+    if (D.file) return fileView(D.file, edit);
     if (D.folder) return folderView(D.folder, edit);
     const folders = p.folders || [];
     let html = '<div class="folder-list">' + folders.map(f => {
       const files = D.files.filter(x => x.folderId === f.id);
       const waiting = files.filter(x => x.status === 'awaiting').length;
+      const unread = files.filter(hasUnread).length;
       return '<div class="folder-card" onclick="app.V.openFolder(\'' + f.id + '\')"><div class="folder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg></div>' +
-        '<div class="folder-name">' + esc(f.name) + '</div><div class="folder-count">' + files.length + (files.length === 1 ? ' file' : ' files') + (waiting ? ' · ' + waiting + ' awaiting client' : '') + '</div></div>';
+        '<div class="folder-name">' + esc(f.name) + '</div><div class="folder-count">' + files.length + (files.length === 1 ? ' file' : ' files') + (waiting ? ' · ' + waiting + ' awaiting client' : '') + (unread ? ' · <span class="fc-new">' + unread + (unread === 1 ? ' new comment' : ' new comments') + '</span>' : '') + '</div></div>';
     }).join('');
     if (edit) html += '<div class="folder-card add-folder" id="addFolderCard" onclick="app.V.startNewFolder()"><div class="add-folder-plus">+</div><div class="folder-name" style="color:var(--muted);">New folder</div><div class="folder-count">e.g. Site photos, Material samples</div></div>' +
       '<div class="folder-card new-folder-form hidden" id="newFolderForm"><div class="folder-name" style="margin-bottom:10px;">Name the folder</div><input type="text" id="newFolderName" placeholder="e.g. Site photos" onkeydown="if(event.key===\'Enter\'){app.V.createFolder();} if(event.key===\'Escape\'){app.V.cancelNewFolder();}"/>' +
@@ -114,19 +127,94 @@
       '<div class="progress hidden" id="upProgress"><div></div></div><div class="small hidden" id="upStatus" style="margin-top:6px;"></div>';
     if (!files.length) html += '<div class="folder-empty" style="margin-top:14px;">No files yet.' + (edit ? ' Upload the first one.' : '') + '</div>';
     else html += '<div class="file-grid" style="margin-top:14px;">' + files.map(x => {
-      const img = /\.(png|jpe?g|gif|webp)$/i.test(x.name || '');
-      const st = x.status === 'approved' ? 'approved' : x.status === 'awaiting' ? 'awaiting client' : x.status === 'declined' ? 'declined' : '';
-      return '<div class="file-card"><div class="file-thumb' + (x.status === 'awaiting' ? ' wait' : '') + '">' + (img ? '<img src="' + attr(x.url) + '" alt=""/>' : esc((x.name || '').split('.').pop().toUpperCase())) + '</div>' +
-        '<div class="file-name"><a href="' + attr(x.url) + '" target="_blank" rel="noopener">' + esc(x.name) + '</a>' + (st ? ' — ' + st : '') + '<br><span class="small">' + A.firstName(x.uploadedBy) + ' · ' + A.ago(x.uploadedAt) + '</span></div>' +
-        (edit ? '<div class="file-actions">' +
-          '<button class="mini' + (x.shared ? ' on' : '') + '" onclick="app.V.toggleShare(\'' + x.id + '\')" data-tip="Clients see shared files in their portal">' + (x.shared ? 'Shared with client' : 'Share with client') + '</button>' +
-          (isElev ? '<button class="mini' + (x.status === 'awaiting' ? ' on' : '') + '" onclick="app.V.setFileStatus(\'' + x.id + '\',\'awaiting\')">Awaiting</button><button class="mini' + (x.status === 'approved' ? ' on' : '') + '" onclick="app.V.setFileStatus(\'' + x.id + '\',\'approved\')">Approved</button>' : '') +
-          '<button class="mini" onclick="app.V.deleteFile(\'' + x.id + '\')">Delete</button></div>' : '') + '</div>';
+      const img = isImage(x);
+      const st = x.status === 'approved' ? 'Approved' : x.status === 'awaiting' ? 'Awaiting client' : x.status === 'declined' ? 'Declined' : '';
+      return '<div class="file-card clickable" onclick="app.V.openFile(\'' + x.id + '\')"><div class="file-thumb' + (x.status === 'awaiting' ? ' wait' : '') + '">' + (img ? '<img src="' + attr(x.url) + '" alt=""/>' : esc((x.name || '').split('.').pop().toUpperCase())) + commentBadge(x) + '</div>' +
+        '<div class="file-name"><span class="fname">' + esc(x.name) + '</span><br><span class="small">' + A.firstName(x.uploadedBy) + ' · ' + A.ago(x.uploadedAt) + '</span>' +
+        ((x.shared || st) ? '<div class="fc-chips">' + (x.shared ? '<span class="fc-chip pub">Published to client</span>' : '') + (st ? '<span class="fc-chip ' + (x.status || '') + '">' + st + '</span>' : '') + '</div>' : '') + '</div></div>';
     }).join('') + '</div>';
     return html;
   }
-  const openFolder = id => { D.folder = id; refresh(); };
-  const closeFolder = () => { D.folder = null; refresh(); };
+  const isImage = x => /\.(png|jpe?g|gif|webp)$/i.test(x.name || '');
+  const fmtSize = n => !n ? '' : n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+
+  // ---- file viewer: preview + client publishing + comments ----
+  function fileView(id, edit) {
+    const p = project(), x = D.files.find(f => f.id === id);
+    if (!x) { D.file = null; return D.folder ? folderView(D.folder, edit) : tabFiles(); }
+    const f = (p.folders || []).find(z => z.id === x.folderId) || { name: 'Files' };
+    const isElev = x.folderId === '2d', img = isImage(x), list = commentsOf(x);
+    const st = x.status === 'approved' ? 'Approved by the client' : x.status === 'awaiting' ? 'Awaiting client approval' : x.status === 'declined' ? 'Declined by the client' : '';
+    let html = '<div class="detail-back" onclick="app.V.closeFile()">&larr; ' + esc(f.name) + '</div>' +
+      '<div class="fv">' +
+        '<div class="fv-preview">' + (img ? '<a href="' + attr(x.url) + '" target="_blank" rel="noopener"><img src="' + attr(x.url) + '" alt=""/></a>'
+          : '<div class="fv-filetype"><div class="fv-ext">' + esc((x.name || '').split('.').pop().toUpperCase()) + '</div><a class="btn-secondary" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open file</a></div>') + '</div>' +
+        '<div class="fv-side">' +
+          '<div class="fv-title">' + esc(x.name) + '</div>' +
+          '<div class="small">Uploaded by ' + esc(A.memberName(x.uploadedBy)) + ' · ' + A.ago(x.uploadedAt) + (x.size ? ' · ' + fmtSize(x.size) : '') + '</div>' +
+          '<div class="fv-section"><div class="fv-label">Client portal</div>' +
+            '<div class="fv-pub' + (x.shared ? ' on' : '') + '"><div class="fv-pub-text">' + (x.shared ? '<b>Published</b> — the client can see this file in their portal' + (x.sharedAt ? ' (since ' + A.ago(x.sharedAt) + ')' : '') + '.' : '<b>Not published</b> — only the team can see this file.') +
+              (st ? '<br><span class="small">' + st + '</span>' : '') + '</div>' +
+            (edit ? '<div class="fv-pub-actions">' + (x.shared ? '<button class="btn-secondary" onclick="app.V.publishFile(\'' + x.id + '\', false)">Unpublish</button>' : '<button class="btn-primary" onclick="app.V.publishFile(\'' + x.id + '\', true)">Publish to client</button>') +
+              (isElev ? '<button class="mini' + (x.status === 'awaiting' ? ' on' : '') + '" onclick="app.V.setFileStatus(\'' + x.id + '\',\'awaiting\')">Awaiting</button><button class="mini' + (x.status === 'approved' ? ' on' : '') + '" onclick="app.V.setFileStatus(\'' + x.id + '\',\'approved\')">Approved</button>' : '') + '</div>' : '') + '</div></div>' +
+          '<div class="fv-section"><div class="fv-label">Comments <span class="small">' + (list.length || 'none yet') + '</span></div>' +
+            '<div class="cm-list" id="cmList">' + (list.length ? list.map(c => '<div class="cm"><div class="cm-head"><span class="cm-who">' + esc(A.memberName(c.by)) + '</span><span class="small">' + A.ago(c.at) + '</span>' +
+              ((c.by === S.me.email || A.isAdmin()) ? '<span class="cm-del" onclick="app.V.deleteComment(\'' + x.id + '\',\'' + c.id + '\')" title="Delete comment">&times;</span>' : '') + '</div><div class="cm-text">' + esc(c.text) + '</div></div>').join('') : '<div class="small" style="padding:6px 0 10px;">No comments yet. Notes here stay inside the team — the client never sees them.</div>') + '</div>' +
+            '<div class="cm-new"><textarea id="cmText" rows="2" placeholder="Write a comment for the team…" onkeydown="if((event.metaKey||event.ctrlKey)&&event.key===\'Enter\'){app.V.addComment();}"></textarea><button class="btn-primary" id="cmBtn" onclick="app.V.addComment()">Comment</button></div>' +
+          '</div>' +
+          (edit ? '<div class="fv-foot"><span class="link danger" onclick="app.V.deleteFile(\'' + x.id + '\')">Delete this file</span></div>' : '') +
+        '</div></div>';
+    return html;
+  }
+  const openFolder = id => { D.folder = id; D.file = null; refresh(); };
+  const closeFolder = () => { D.folder = null; D.file = null; refresh(); };
+  function openFile(id) {
+    const x = D.files.find(f => f.id === id); if (!x) return;
+    D.folder = x.folderId; D.file = id; refresh();
+    markSeen(x);
+  }
+  const closeFile = () => { D.file = null; refresh(); };
+  async function markSeen(x) {   // remember that I have seen the latest comments (clears the "new" badge on every device)
+    if (!x.lastCommentAt) return;
+    const key = seenKey(S.me.email), now = A.nowISO();
+    if (x.seen && x.seen[key] && x.seen[key] >= x.lastCommentAt) return;
+    x.seen = Object.assign({}, x.seen || {}, { [key]: now });
+    try { await A.col('projects').doc(project().id).collection('files').doc(x.id).update({ ['seen.' + key]: now }); } catch (e) { A.dlog('comment', 'seen update failed ' + (e.code || e.message)); }
+  }
+  async function addComment() {
+    const x = D.files.find(f => f.id === D.file), p = project(); if (!x) return;
+    const ta = $('cmText'), text = (ta.value || '').trim(); if (!text) { ta.focus(); return; }
+    const btn = $('cmBtn'); btn.disabled = true; btn.textContent = 'Posting…';
+    const c = { id: 'c' + A.uid(), by: S.me.email, at: A.nowISO(), text: text.slice(0, 2000) };
+    const key = seenKey(S.me.email);
+    try {
+      await A.col('projects').doc(p.id).collection('files').doc(x.id).update({ comments: firebase.firestore.FieldValue.arrayUnion(c), lastCommentAt: c.at, lastCommentBy: c.by, ['seen.' + key]: c.at });
+    } catch (e) { btn.disabled = false; btn.textContent = 'Comment'; A.toast('Could not post the comment — ' + (e.code || e.message)); return; }
+    if (!commentsOf(x).some(z => z.id === c.id)) x.comments = commentsOf(x).concat([c]); x.lastCommentAt = c.at; x.lastCommentBy = c.by; x.seen = Object.assign({}, x.seen || {}, { [key]: c.at });
+    await A.logActivity(p, A.firstName(S.me.email) + ' commented on ' + x.name + ': “' + (text.length > 60 ? text.slice(0, 60) + '…' : text) + '”', 'file');
+    const others = [...new Set((p.assigned || []).concat([x.uploadedBy]).concat(commentsOf(x).map(z => z.by)))].filter(e => e && e !== S.me.email);
+    await A.notify(others, A.firstName(S.me.email) + ' commented on ' + x.name + ' (' + p.client + ')', p.id, 'comment');
+    refresh();
+    setTimeout(() => { const l = $('cmList'); if (l) l.scrollTop = l.scrollHeight; }, 30);
+  }
+  function deleteComment(fileId, cid) {
+    const x = D.files.find(f => f.id === fileId), c = commentsOf(x).find(z => z.id === cid); if (!c) return;
+    A.confirmBox('Delete this comment?', '“' + (c.text.length > 80 ? c.text.slice(0, 80) + '…' : c.text) + '”', 'Delete', async () => {
+      await A.col('projects').doc(project().id).collection('files').doc(x.id).update({ comments: firebase.firestore.FieldValue.arrayRemove(c) });
+      x.comments = commentsOf(x).filter(z => z.id !== cid);
+      const last = x.comments[x.comments.length - 1];
+      await A.col('projects').doc(project().id).collection('files').doc(x.id).update({ lastCommentAt: last ? last.at : null, lastCommentBy: last ? last.by : null });
+      x.lastCommentAt = last ? last.at : null; x.lastCommentBy = last ? last.by : null;
+      refresh();
+    }, true);
+  }
+  async function publishFile(id, on) {
+    const x = D.files.find(f => f.id === id); const p = project(); if (!x || !!x.shared === !!on) return;
+    const patch = { shared: !!on, sharedAt: on ? A.nowISO() : null };
+    await A.col('projects').doc(p.id).collection('files').doc(id).update(patch); Object.assign(x, patch);
+    await A.logActivity(p, x.name + (on ? ' published to the client portal' : ' removed from the client portal'), 'file');
+    await syncPortal(p); refresh(); A.toast(on ? 'Published — the client can now see it' : 'Unpublished');
+  }
   function startNewFolder() { $('addFolderCard').classList.add('hidden'); $('newFolderForm').classList.remove('hidden'); setTimeout(() => { const el = $('newFolderName'); if (el) el.focus(); }, 50); }
   function cancelNewFolder() { $('newFolderForm').classList.add('hidden'); $('addFolderCard').classList.remove('hidden'); }
   async function createFolder() {
@@ -165,7 +253,7 @@
   }
   function deleteFile(id) {
     const x = D.files.find(f => f.id === id);
-    A.confirmBox('Delete "' + x.name + '"?', 'This cannot be undone.', 'Delete', async () => { await removeFileDoc(x); await A.logActivity(project(), 'Deleted ' + x.name, 'file'); await syncPortal(project()); refresh(); }, true);
+    A.confirmBox('Delete "' + x.name + '"?', 'This cannot be undone.', 'Delete', async () => { await removeFileDoc(x); if (D.file === id) D.file = null; await A.logActivity(project(), 'Deleted ' + x.name, 'file'); await syncPortal(project()); refresh(); }, true);
   }
   async function setFileStatus(id, status) {
     const x = D.files.find(f => f.id === id); const p = project();
@@ -174,12 +262,7 @@
     await A.logActivity(p, x.name + (s === 'approved' ? ' marked approved' : s === 'awaiting' ? ' awaiting client approval' : ' status cleared'), 'file');
     await syncPortal(p); refresh();
   }
-  async function toggleShare(id) {
-    const x = D.files.find(f => f.id === id); const p = project();
-    await A.col('projects').doc(p.id).collection('files').doc(id).update({ shared: !x.shared }); x.shared = !x.shared;
-    await A.logActivity(p, x.name + (x.shared ? ' shared with client' : ' hidden from client'), 'file');
-    await syncPortal(p); refresh();
-  }
+  const toggleShare = id => { const x = D.files.find(f => f.id === id); return x ? publishFile(id, !x.shared) : null; };
 
   // ============================================================
   //  CLIENT CHECKLIST
@@ -464,7 +547,7 @@
       '<div class="drawer-foot"><button class="btn-secondary" onclick="app.closeModal()">Close</button><a class="btn-primary" style="text-decoration:none;" href="https://wa.me/' + attr((p.phone || '').replace(/[^\d]/g, '')) + '?text=' + encodeURIComponent('Hello ' + p.client + ', please open your ' + (A.CFG.companyName || 'RUF') + ' project page: ' + link) + '" target="_blank" rel="noopener">Open in WhatsApp</a></div>');
   }
 
-  Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare,
+  Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile,
     createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, applyResponse, dismissResponse, phaseChanged, toggleGroup, renderProjectGantt,
     qSet, qValid, qItem, qAdd, qRemove, qCalc, qSave, qSend, qNewVersion, qPrint, saveSettings, newPortalLink, deleteProject, reopenProject, syncPortal, portalLink });
 })();
