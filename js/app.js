@@ -4,7 +4,7 @@
    ============================================================ */
 window.app = (() => {
   const CFG = window.RUF_CONFIG || {};
-  const APP_VERSION = '2026.11.16b';
+  const APP_VERSION = '2026.11.16c';
 
   // ---------- diagnostics (small ring buffer in localStorage; shown at #/diagnostics) ----------
   const T0 = performance.now();
@@ -307,6 +307,9 @@ window.app = (() => {
       dlog('auth', user ? 'state: signed in (' + user.email + ')' : 'state: signed out');
       if (!user) {
         const wasIn = !!S.me; S.me = null; S.user = null; loginBusy(false);
+        // drop the previous person's loaded data so the next sign-in on this device starts clean
+        S.projects = []; S.members = []; S.meetings = []; S.notifs = []; S.checkups = []; S.responses = [];
+        Object.assign(S.detail, { project: null, files: [], activity: [], tab: 'files', folder: null, file: null });   // in place — detail.js keeps a reference to this object
         showLogin(wasIn ? 'You were signed out. Please sign in again.' : '');
         return;
       }

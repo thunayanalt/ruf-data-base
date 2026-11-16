@@ -138,28 +138,40 @@
       '<div class="progress hidden" id="upProgress"><div></div></div><div class="small hidden" id="upStatus" style="margin-top:6px;"></div>';
     if (!files.length) html += '<div class="folder-empty" style="margin-top:14px;">No files yet.' + (edit ? ' Upload the first one.' : '') + '</div>';
     else html += '<div class="file-grid" style="margin-top:14px;">' + files.map(x => {
-      const img = isImage(x);
+      const img = isImage(x), vid = isVideo(x);
       const st = x.status === 'approved' ? 'Approved' : x.status === 'awaiting' ? 'Awaiting client' : x.status === 'declined' ? 'Declined' : '';
-      return '<div class="file-card clickable" onclick="app.V.openFile(\'' + x.id + '\')"><div class="file-thumb' + (x.status === 'awaiting' ? ' wait' : '') + '">' + (img ? '<img src="' + attr(x.url) + '" alt=""/>' : esc((x.name || '').split('.').pop().toUpperCase())) + commentBadge(x) + '</div>' +
+      return '<div class="file-card clickable" onclick="app.V.openFile(\'' + x.id + '\')"><div class="file-thumb' + (x.status === 'awaiting' ? ' wait' : '') + (vid ? ' video' : '') + '">' + (img ? '<img src="' + attr(x.url) + '" alt=""/>' : (vid ? PLAY_ICON : '') + esc((x.name || '').split('.').pop().toUpperCase())) + commentBadge(x) + '</div>' +
         '<div class="file-name"><span class="fname">' + esc(x.name) + '</span><br><span class="small">' + A.firstName(x.uploadedBy) + ' · ' + A.ago(x.uploadedAt) + '</span>' +
         ((x.shared || st) ? '<div class="fc-chips">' + (x.shared ? '<span class="fc-chip pub">Published to client</span>' : '') + (st ? '<span class="fc-chip ' + (x.status || '') + '">' + st + '</span>' : '') + '</div>' : '') + '</div></div>';
     }).join('') + '</div>';
     return html;
   }
   const isImage = x => /\.(png|jpe?g|gif|webp)$/i.test(x.name || '');
+  const isVideo = x => /\.(mp4|m4v|mov|webm)$/i.test(x.name || '');
+  const PLAY_ICON = '<svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
   const fmtSize = n => !n ? '' : n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+  // the browser could not decode the video (usually an iPhone HEVC .mov on a PC without the codec) — fall back to opening the file
+  function videoFailed(el) {
+    const wrap = el.closest('.fv-video-wrap'); if (!wrap) return;
+    el.classList.add('hidden'); const fb = wrap.querySelector('.fv-video-fallback'); if (fb) fb.classList.remove('hidden');
+    A.dlog('video', 'cannot play ' + (el.currentSrc || el.src || '').split('?')[0].split('/').pop() + ' · code ' + (el.error && el.error.code));
+  }
 
   // ---- file viewer: preview + client publishing + comments ----
   function fileView(id, edit) {
     const p = project(), x = D.files.find(f => f.id === id);
     if (!x) { D.file = null; return D.folder ? folderView(D.folder, edit) : tabFiles(); }
     const f = (p.folders || []).find(z => z.id === x.folderId) || { name: 'Files' };
-    const isElev = x.folderId === '2d', img = isImage(x), list = commentsOf(x);
+    const isElev = x.folderId === '2d', img = isImage(x), vid = isVideo(x), list = commentsOf(x);
     const st = x.status === 'approved' ? 'Approved by the client' : x.status === 'awaiting' ? 'Awaiting client approval' : x.status === 'declined' ? 'Declined by the client' : '';
+    const preview = img ? '<a href="' + attr(x.url) + '" target="_blank" rel="noopener"><img src="' + attr(x.url) + '" alt=""/></a>'
+      : vid ? '<div class="fv-video-wrap"><video class="fv-video" controls playsinline preload="metadata" src="' + attr(x.url) + '" onerror="app.V.videoFailed(this)"></video>' +
+          '<div class="fv-video-fallback hidden"><div class="fv-ext">' + esc((x.name || '').split('.').pop().toUpperCase()) + '</div><div class="small" style="max-width:360px;line-height:1.5;">This browser can\'t play this video format (iPhone HEVC videos play on Safari and most phones, but not on every PC).</div><a class="btn-secondary" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open file</a></div>' +
+          '<div class="fv-video-foot"><a class="link" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open in new tab</a></div></div>'
+      : '<div class="fv-filetype"><div class="fv-ext">' + esc((x.name || '').split('.').pop().toUpperCase()) + '</div><a class="btn-secondary" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open file</a></div>';
     let html = '<div class="detail-back" onclick="app.V.closeFile()">&larr; ' + esc(f.name) + '</div>' +
       '<div class="fv">' +
-        '<div class="fv-preview">' + (img ? '<a href="' + attr(x.url) + '" target="_blank" rel="noopener"><img src="' + attr(x.url) + '" alt=""/></a>'
-          : '<div class="fv-filetype"><div class="fv-ext">' + esc((x.name || '').split('.').pop().toUpperCase()) + '</div><a class="btn-secondary" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open file</a></div>') + '</div>' +
+        '<div class="fv-preview' + (vid ? ' is-video' : '') + '">' + preview + '</div>' +
         '<div class="fv-side">' +
           '<div class="fv-title">' + esc(x.name) + '</div>' +
           '<div class="small">Uploaded by ' + esc(A.memberName(x.uploadedBy)) + ' · ' + A.ago(x.uploadedAt) + (x.size ? ' · ' + fmtSize(x.size) : '') + '</div>' +
@@ -560,7 +572,7 @@
       '<div class="drawer-foot"><button class="btn-secondary" onclick="app.closeModal()">Close</button><a class="btn-primary" style="text-decoration:none;" href="https://wa.me/' + attr((p.phone || '').replace(/[^\d]/g, '')) + '?text=' + encodeURIComponent('Hello ' + p.client + ', please open your ' + (A.CFG.companyName || 'RUF') + ' project page: ' + link) + '" target="_blank" rel="noopener">Open in WhatsApp</a></div>');
   }
 
-  Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile,
+  Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile, videoFailed,
     createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, applyResponse, dismissResponse, phaseChanged, toggleGroup, renderProjectGantt,
     qSet, qValid, qItem, qAdd, qRemove, qCalc, qSave, qSend, qNewVersion, qPrint, saveSettings, newPortalLink, deleteProject, reopenProject, syncPortal, portalLink });
 })();
