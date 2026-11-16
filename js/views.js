@@ -39,7 +39,7 @@
       .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
     const waiting = active.filter(p => p.waiting);
     const due = active.filter(p => p.handover && A.d0(p.handover) >= T && A.d0(p.handover) <= futureEnd).sort((a, b) => a.handover.localeCompare(b.handover));
-    return { active: active.concat(doneIn), waiting, due, done: doneIn };
+    return { active, waiting, due, done: doneIn };
   }
 
   function viewDashboard() {
@@ -91,7 +91,7 @@
     html += '<div class="period-row"><div class="section-heading" style="margin:0;">Overview</div><div class="view-switch">' +
       Object.keys(PERIOD_DAYS).map(p => '<div class="view-btn' + (p === period ? ' active' : '') + '" onclick="app.V.dashPeriod(\'' + p + '\')">' + ({ '1w': '1 week', '1m': '1 month', '6m': '6 months', '1y': '1 year', '5y': '5 years', 'all': 'All time' }[p]) + '</div>').join('') + '</div></div>';
     const tiles = [
-      ['active', Sx.active.length, period === 'all' ? 'Active projects' : 'Active ' + PERIOD_PAST[period]],
+      ['active', Sx.active.length, 'Active projects'],
       ['waiting', Sx.waiting.length, 'Waiting on client'],
       ['due', Sx.due.length, 'Due ' + PERIOD_TXT[period]],
       ['done', Sx.done.length, 'Completed ' + PERIOD_PAST[period]],

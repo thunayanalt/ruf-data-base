@@ -8,19 +8,26 @@
   const TABS = [['files', 'Files'], ['checklist', 'Client checklist'], ['activity', 'Activity'], ['schedule', 'Schedule & Gantt'], ['quote', 'Quotation', true], ['settings', 'Settings', true]];
 
   // ---------- load + render ----------
-  async function openDetail(id, sub) {
-    const listed = S.projects.find(x => x.id === id);
+  async function openDetail(id, sub, isCurrent) {
+    const current = () => !isCurrent || isCurrent();   // false once the user navigated elsewhere while we were loading
+    let listed = S.projects.find(x => x.id === id);
+    if (!listed) {   // not in the list we loaded — fetch it once (new project, or list loaded before it existed)
+      try { const snap = await A.col('projects').doc(id).get(); if (snap.exists) { listed = { id: snap.id, ...snap.data() }; S.projects.unshift(listed); } } catch (e) { A.dlog('detail', 'direct fetch failed ' + (e.code || e.message)); }
+    }
     if (D.project && D.project.id === id && listed && listed !== D.project) D.project = listed;   // keep pointing at the live list object
+    if (!current()) return;
     if (!D.project || D.project.id !== id) {
       const p = listed;
-      if (!p || !A.canEditProject(p) && !A.canSeeAll()) { $('view').innerHTML = '<div class="empty">Project not found or not assigned to you.</div>'; return; }
-      D.project = p; D.folder = null;
+      if (!p || !A.canEditProject(p) && !A.canSeeAll()) { $('view').innerHTML = '<div class="empty">Project not found or not assigned to you. <span class="link" onclick="location.hash=\'#/projects\'">Back to projects</span></div>'; return; }
       const [files, act] = await Promise.all([
         A.col('projects').doc(id).collection('files').get().then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))),
         A.col('projects').doc(id).collection('activity').orderBy('at', 'desc').limit(200).get().then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))),
       ]);
+      // keep what we loaded even if the user moved on — the project opens instantly when they come back
+      D.project = p; D.folder = null;
       D.files = files.sort((a, b) => (a.name || '').localeCompare(b.name || '')); D.activity = act;
     }
+    if (!current()) return;
     D.tab = sub || 'files';
     if ((D.tab === 'quote' || D.tab === 'settings') && !A.canSeeAll()) D.tab = 'files';
     $('view').innerHTML = renderDetail();

@@ -98,10 +98,22 @@
     grid += '</div>';
     const upcoming = S.meetings.filter(x => x.date >= T).slice(0, 8);
     return '<div class="topbar"><div><div class="greeting">Calendar</div><div class="greeting-sub">Meetings only — client meetings, review calls, site visits, team check-ins. Double-click a day to add one.</div></div>' +
-      '<div style="display:flex;gap:8px;align-items:center;"><div class="cal-nav"><span onclick="app.V.calMove(-1)">&lsaquo;</span><span class="cal-month">' + A.MONTHS_LONG[m.getMonth()] + ' ' + m.getFullYear() + '</span><span onclick="app.V.calMove(1)">&rsaquo;</span></div><button class="btn-primary" onclick="app.V.newMeeting()">+ New meeting</button></div></div>' +
-      '<div class="cal-layout"><div>' + grid + '<div class="cal-legend"><span><i class="cl-dot"></i>Internal / site</span><span><i class="cl-dot wait"></i>Client</span></div></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + gcalButton() + '<div class="cal-nav"><span onclick="app.V.calMove(-1)">&lsaquo;</span><span class="cal-month">' + A.MONTHS_LONG[m.getMonth()] + ' ' + m.getFullYear() + '</span><span onclick="app.V.calMove(1)">&rsaquo;</span></div><button class="btn-primary" onclick="app.V.newMeeting()">+ New meeting</button></div></div>' +
+      '<div class="cal-layout"><div>' + grid + '<div class="cal-legend"><span><i class="cl-dot"></i>Internal / site</span><span><i class="cl-dot wait"></i>Client</span><span class="cal-sync">' + (A.gcal.configured() ? (A.gcal.connected() ? 'Google Calendar connected — new meetings are added to your calendar and attendees get invitations.' : 'Connect Google Calendar to add meetings to your calendar and invite attendees automatically.') : 'Google Calendar not set up yet — use "Add to Google Calendar" inside a meeting.') + '</span></div></div>' +
       '<div class="upcoming"><div class="section-heading" style="margin-top:0;">Upcoming</div>' + (upcoming.length ? upcoming.map(x => { const d = A.d0(x.date); return '<div class="up-item ' + (x.type === 'client' ? 'client' : 'internal') + '" onclick="app.V.editMeeting(\'' + x.id + '\')" data-tip-title="' + attr(x.title) + '" data-tip="' + attr(meetingTip(x)) + '"><div class="up-date"><div class="up-day">' + d.getDate() + '</div><div class="up-mon">' + A.MONTHS[d.getMonth()] + '</div></div><div><div class="up-title">' + esc(x.title) + '</div><div class="up-meta">' + esc([x.time && (x.time + (x.end ? ' – ' + x.end : '')), x.location, (x.attendees || []).map(A.firstName).join(', ')].filter(Boolean).join(' · ')) + '</div><span class="up-type">' + (x.type === 'client' ? 'Client' : 'Internal / site') + '</span></div></div>'; }).join('') : '<div class="small">No upcoming meetings.</div>') + '</div></div>';
   }
+  function gcalButton() {
+    if (!A.gcal.configured()) return '';
+    return A.gcal.connected()
+      ? '<button class="btn-secondary gcal-btn on" onclick="app.V.gcalDisconnect()" data-tip="Connected — click to disconnect"><span class="gdot"></span>Google Calendar</button>'
+      : '<button class="btn-secondary gcal-btn" onclick="app.V.gcalConnect()"><span class="gdot off"></span>Connect Google Calendar</button>';
+  }
+  async function gcalConnect() {
+    try { await A.gcal.connect(true); A.toast('Google Calendar connected'); A.render(); }
+    catch (e) { A.toast(e.message, 5000); }
+  }
+  function gcalDisconnect() { A.gcal.disconnect(); A.toast('Google Calendar disconnected'); A.render(); }
+
   function meetingTip(x) { const p = S.projects.find(q => q.id === x.projectId); return [x.time ? x.time + (x.end ? ' – ' + x.end : '') + (x.location ? ' · ' + x.location : '') : x.location, (x.attendees || []).length ? 'With: ' + x.attendees.map(A.firstName).join(', ') : '', p ? 'Project: ' + p.client : '', x.agenda ? 'Agenda: ' + x.agenda : ''].filter(Boolean).join('\n'); }
   const calMove = n => { S.ui.calMonth = A.addMonths(S.ui.calMonth, n); A.render(); };
   function meetingForm(x) {
@@ -113,7 +125,10 @@
       '<div class="fld-row"><div class="fld"><label>Location</label><input type="text" id="mtLoc" value="' + attr(x.location || '') + '" placeholder="Showroom, on site, phone…"/></div><div class="fld"><label>Project</label><select id="mtProject"><option value="">— none —</option>' + projs.map(p => '<option value="' + p.id + '"' + (x.projectId === p.id ? ' selected' : '') + '>' + esc(p.client) + '</option>').join('') + '</select></div></div>' +
       '<div class="fld"><label>Attendees</label><div class="check-list two-col" id="mtWho">' + team.map(m => '<label class="chk"><input type="checkbox" data-email="' + attr(m.email) + '"' + ((x.attendees || [S.me.email]).includes(m.email) ? ' checked' : '') + '/><span>' + esc(m.name) + '</span></label>').join('') + '</div></div>' +
       '<div class="fld"><label>Agenda</label><textarea id="mtAgenda" rows="2">' + esc(x.agenda || '') + '</textarea></div>' +
-      (x.id ? '<div class="small"><a class="link" target="_blank" rel="noopener" href="' + attr(gcalLink(x)) + '">Add to Google Calendar</a></div>' : '') + '</div>' +
+      (A.gcal.configured()
+        ? '<label class="chk" style="border:1px solid var(--border);border-radius:8px;"><input type="checkbox" id="mtGcal"' + (A.gcal.connected() || !x.id ? ' checked' : '') + '/><span>' + (x.id && x.gcal && x.gcal.eventId ? 'Update the Google Calendar event and re-send invitations' : 'Add to my Google Calendar and send invitations to attendees') + '</span></label>' +
+          '<div class="fld-hint">' + (A.gcal.connected() ? 'Google Calendar is connected.' : 'You\'ll be asked to allow access to your Google Calendar the first time.') + (x.gcal && x.gcal.link ? ' <a class="link" target="_blank" rel="noopener" href="' + attr(x.gcal.link) + '">Open in Google Calendar</a>' : '') + '</div>'
+        : (x.id ? '<div class="small"><a class="link" target="_blank" rel="noopener" href="' + attr(gcalLink(x)) + '">Add to Google Calendar</a></div>' : '')) + '</div>' +
       '<div class="drawer-foot">' + (x.id ? '<button class="btn-secondary danger" onclick="app.V.deleteMeeting(\'' + x.id + '\')">Delete</button>' : '') + '<button class="btn-secondary" onclick="app.closeModal()">Cancel</button><button class="btn-primary" onclick="app.V.saveMeeting(\'' + (x.id || '') + '\')">Save</button></div>';
   }
   function gcalLink(x) { const d = x.date.replace(/-/g, ''); const t = (x.time || '09:00').replace(':', '') + '00', e = (x.end || x.time || '10:00').replace(':', '') + '00'; return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(x.title) + '&dates=' + d + 'T' + t + '/' + d + 'T' + e + '&details=' + encodeURIComponent(x.agenda || '') + '&location=' + encodeURIComponent(x.location || ''); }
@@ -122,11 +137,26 @@
   async function saveMeeting(id) {
     const title = $('mtTitle').value.trim(); if (!title) { A.toast('Give the meeting a title'); return; }
     const doc = { title, type: A.segVal('mtType') || 'internal', date: $('mtDate').dataset.iso || A.iso(A.today()), time: $('mtTime').value.trim(), end: $('mtEnd').value.trim(), location: $('mtLoc').value.trim(), projectId: $('mtProject').value || null, attendees: [...document.querySelectorAll('#mtWho input:checked')].map(i => i.dataset.email), agenda: $('mtAgenda').value.trim(), updatedAt: A.nowISO(), by: S.me.email };
-    if (id) { await A.col('meetings').doc(id).update(doc); Object.assign(S.meetings.find(m => m.id === id), doc); }
-    else { const ref = await A.col('meetings').add(doc); S.meetings.push({ id: ref.id, ...doc }); await A.notify(doc.attendees.filter(e => e !== S.me.email), 'Meeting: ' + title + ' — ' + A.fmtLong(doc.date) + (doc.time ? ' ' + doc.time : ''), doc.projectId, 'meeting'); }
-    S.meetings.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); A.closeModal(); A.render(); A.toast('Meeting saved');
+    let m;
+    if (id) { await A.col('meetings').doc(id).update(doc); m = S.meetings.find(x => x.id === id); Object.assign(m, doc); }
+    else { const ref = await A.col('meetings').add(doc); m = { id: ref.id, ...doc }; S.meetings.push(m); await A.notify(doc.attendees.filter(e => e !== S.me.email), 'Meeting: ' + title + ' — ' + A.fmtLong(doc.date) + (doc.time ? ' ' + doc.time : ''), doc.projectId, 'meeting'); }
+    const wantGcal = !!(A.gcal.configured() && $('mtGcal') && $('mtGcal').checked);
+    S.meetings.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); A.closeModal(); A.render();
+    if (wantGcal) {
+      try {
+        const g = m.gcal && m.gcal.eventId && m.gcal.owner === S.me.email ? await A.gcal.updateEvent(m) : await A.gcal.createEvent(m);
+        await A.col('meetings').doc(m.id).update({ gcal: g }); m.gcal = g; A.render();
+        A.toast('Meeting saved — added to Google Calendar, invitations sent');
+      } catch (e) { A.toast('Meeting saved, but Google Calendar sync failed: ' + e.message, 6000); }
+    } else A.toast('Meeting saved');
   }
-  async function deleteMeeting(id) { await A.col('meetings').doc(id).delete(); S.meetings = S.meetings.filter(m => m.id !== id); A.closeModal(); A.render(); }
+  async function deleteMeeting(id) {
+    const m = S.meetings.find(x => x.id === id);
+    await A.col('meetings').doc(id).delete(); S.meetings = S.meetings.filter(x => x.id !== id); A.closeModal(); A.render();
+    if (m && m.gcal && m.gcal.eventId && m.gcal.owner === S.me.email && A.gcal.configured()) {
+      try { await A.gcal.deleteEvent(m); A.toast('Meeting deleted — removed from Google Calendar'); } catch (e) { A.toast('Deleted here, but not from Google Calendar: ' + e.message, 6000); }
+    }
+  }
 
   // ============================================================
   //  TEAM
@@ -197,7 +227,7 @@
     }, true);
   }
 
-  Object.assign(A.V, { viewGantt, renderGantt, setGanttZoom, ganttShift, viewCalendar, calMove, newMeeting, editMeeting, saveMeeting, deleteMeeting, viewTeam, editMember, inviteMember, saveMember, setActive, removeMember, roleHint });
+  Object.assign(A.V, { viewGantt, renderGantt, setGanttZoom, ganttShift, viewCalendar, calMove, newMeeting, editMeeting, saveMeeting, deleteMeeting, gcalConnect, gcalDisconnect, viewTeam, editMember, inviteMember, saveMember, setActive, removeMember, roleHint });
 
   // ---------- register + boot ----------
   A.registerViews({ viewDashboard: A.V.viewDashboard, viewProjects: A.V.viewProjects, viewNewProject: A.V.viewNewProject, npUpdate: A.V.npUpdate, openDetail: A.V.openDetail, viewGantt, renderGantt, viewCalendar, viewTeam });

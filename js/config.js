@@ -27,5 +27,12 @@ window.RUF_CONFIG = {
   n8nWebhookUrl: "",
 
   // 5) Optional — public address of the app (used in client links). Leave empty to detect automatically.
-  publicUrl: ""
+  publicUrl: "",
+
+  // 6) Google Calendar — paste the OAuth "Client ID" from Google Cloud (see SETUP.md, "Google Calendar").
+  //    When set, meetings are added to the creator's Google Calendar and attendees get invitations.
+  googleClientId: "",
+
+  // 7) Time zone used for meeting times sent to Google Calendar.
+  timeZone: "Asia/Kuwait"
 };
