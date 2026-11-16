@@ -2363,3 +2363,8 @@
   .fv-preview img { max-height: 48vh; }
   .cm-list { max-height: none; }
 }
+
+/* background-save indicator (v2026.11.16b) */
+.saving-dot { display: none; margin-left: 6px; color: var(--faint); font-size: 10.5px; }
+.saving-dot.on { display: inline; animation: savingPulse 1s ease-in-out infinite; }
+@keyframes savingPulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
