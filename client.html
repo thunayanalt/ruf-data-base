@@ -3,36 +3,161 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Your project</title>
+<title>Your project · RUF</title>
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <meta name="theme-color" content="#F6F4EF">
-<link rel="stylesheet" href="css/app.css?v=2026.11.17">
+<link rel="stylesheet" href="css/app.css?v=2026.11.17c">
 <style>
-  body { display: block; }
-  .cp { max-width: 820px; margin: 0 auto; padding: 28px 18px 60px; }
-  .cp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
-  .cp-brand { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
-  .cp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; }
-  .cp-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  body { display: block; background: var(--bg); }
+  .cp { max-width: 860px; margin: 0 auto; padding: 22px 18px 70px; }
+
+  /* ---- loading splash: the RUF mark, then the wordmark ---- */
+  .cp-splash { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; transition: opacity .45s ease; }
+  .cp-splash.out { opacity: 0; pointer-events: none; }
+  .cp-splash img { display: block; }
+  .cp-splash .sp-mark { width: 92px; opacity: 0; transform: translateY(10px); animation: spIn .7s cubic-bezier(.2,.7,.2,1) .1s forwards; }
+  .cp-splash .sp-word { width: 56px; opacity: 0; transform: translateY(6px); animation: spIn .7s cubic-bezier(.2,.7,.2,1) .5s forwards; }
+  .cp-splash .sp-bar { width: 120px; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 10px; opacity: 0; animation: spIn .4s ease .9s forwards; }
+  .cp-splash .sp-bar i { display: block; height: 100%; width: 40%; background: var(--ink); border-radius: 2px; animation: spSlide 1.1s ease-in-out infinite; }
+  .cp-splash .sp-text { font-size: 12px; color: var(--faint); letter-spacing: .08em; text-transform: uppercase; opacity: 0; animation: spIn .4s ease 1.1s forwards; }
+  @keyframes spIn { to { opacity: 1; transform: none; } }
+  @keyframes spSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(300%); } }
+
+  /* ---- header with the real logo lockup ---- */
+  .cp-head { display: flex; flex-direction: column; align-items: stretch; gap: 20px; padding: 10px 0 22px; }
+  .cp-logo { display: flex; align-items: center; justify-content: center; gap: 16px; align-self: center; }
+  .cp-logo .lg-mark { height: 46px; width: auto; display: block; }
+  .cp-logo .lg-div { width: 1px; height: 48px; background: #B9B4AC; }
+  .cp-logo .lg-word { height: 44px; width: auto; display: block; }
+  .cp-title { min-width: 0; text-align: left; }
+  .cp-eyebrow { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+  .cp-client { font-size: 26px; font-weight: 700; letter-spacing: -.01em; margin-top: 3px; line-height: 1.15; }
+  .cp-prod { font-size: 13.5px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
+
+  /* ---- cards ---- */
+  .cp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; margin-bottom: 16px; opacity: 0; transform: translateY(10px); animation: cardIn .55s cubic-bezier(.2,.7,.2,1) forwards; }
+  .cp-card:nth-child(2) { animation-delay: .06s } .cp-card:nth-child(3) { animation-delay: .12s } .cp-card:nth-child(4) { animation-delay: .18s } .cp-card:nth-child(5) { animation-delay: .24s } .cp-card:nth-child(6) { animation-delay: .3s } .cp-card:nth-child(n+7) { animation-delay: .36s }
+  @keyframes cardIn { to { opacity: 1; transform: none; } }
+  .cp-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .cp-title-sm { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 700; }
+  .cp-h { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .cp-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+
+  /* timeline: stage track + Gantt */
+  .tl-track { margin: 6px 0 16px; }
+  .tl-track .stage-tracker { align-items: stretch; min-width: 0; width: 100%; }
+  .cg { margin-top: 6px; }
+  .cg-cols { display: grid; grid-template-columns: 112px 1fr; }
+  .ccg-labels .cg-lab { height: 34px; display: flex; align-items: center; font-size: 12.5px; color: var(--muted); padding-right: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ccg-labels .cg-lab.hdr { height: 18px; }
+  .ccg-labels .cg-lab.cur { color: var(--ink); font-weight: 700; }
+  .ccg-lanes { position: relative; border-left: 1px solid var(--border); }
+  .cg-months { position: relative; height: 18px; border-bottom: 1px solid var(--border); }
+  .cg-months span { position: absolute; top: 0; font-size: 10.5px; color: var(--faint); transform: translateX(-50%); white-space: nowrap; }
+  .cg-lane { position: relative; height: 34px; }
+  .cg-bar { position: absolute; top: 8px; height: 18px; border-radius: 999px; background: #E8E4DC; min-width: 6px; }
+  .cg-bar.done { background: var(--accent-done); }
+  .cg-bar.cur { background: var(--ink); box-shadow: 0 2px 8px rgba(29,25,24,.25); }
+  .cg-bar.cur::after { content: ""; position: absolute; inset: 0; border-radius: 999px; background: repeating-linear-gradient(135deg, rgba(255,255,255,.14) 0 6px, transparent 6px 12px); }
+  .cg-today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #C9A461; z-index: 2; }
+  .cg-today b { position: absolute; top: 0; left: 4px; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: #A47C2C; font-weight: 700; white-space: nowrap; background: var(--surface); padding-right: 4px; }
+  .cg-dates { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .cg-dates b { color: var(--ink); }
+
+  /* notifications: one line each; tapping jumps to the matching section */
+  .nf-list { margin: 0 -6px; }
+  .nf { display: grid; grid-template-columns: 22px 1fr auto 14px; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 10px; cursor: pointer; border-top: 1px solid var(--border); font-size: 13.5px; line-height: 1.4; color: var(--ink); }
+  .nf:first-child { border-top: 0; }
+  .nf:hover { background: var(--bg); }
+  .nf.todo { font-weight: 600; }
+  .nf.unread .nf-text { font-weight: 700; }
+  .nf.static { cursor: default; } .nf.static:hover { background: none; } .nf.static .nf-go { visibility: hidden; }
+  .nt-dot { width: 18px; height: 18px; border-radius: 50%; background: #E8E4DC; position: relative; }
+  .nt-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; border-radius: 50%; background: #8B8680; transform: translate(-50%,-50%); }
+  .nt-dot.approval, .nt-dot.todo { background: #F6E7C4; } .nt-dot.approval::after, .nt-dot.todo::after { background: #A47C2C; }
+  .nt-dot.approved { background: #D9E8DB; } .nt-dot.approved::after { background: #3F6B48; }
+  .nt-dot.stage { background: #D7E2EC; } .nt-dot.stage::after { background: #55708A; }
+  .nf-text { min-width: 0; }
+  .nf-when { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+  .nf-tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8A6A22; background: #F2DFB3; border-radius: 999px; padding: 3px 7px; white-space: nowrap; }
+  .nf-go { color: var(--faint); font-size: 16px; line-height: 1; text-align: right; }
+  .nt-more { margin-top: 8px; font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .cp-card { scroll-margin-top: 14px; }
+  .cp-card.flash { box-shadow: 0 0 0 3px #E9C87D; transition: box-shadow .3s; }
+  /* to-do list */
+  .td-block { padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
+  .td-block:first-of-type { padding-top: 0; margin-top: 0; border-top: 0; }
+  .td-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .td-num { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative; top: 2px; }
+  .td-title { font-size: 15.5px; font-weight: 700; }
+  .td-meta { font-size: 12.5px; color: var(--faint); }
+  .td-empty { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+  .td-empty .ap-ic { background: #E9F1E9; }
+
+  /* files */
   .cp-file { display: flex; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
   .cp-file:first-of-type { border-top: none; }
-  .cp-thumb { width: 84px; height: 64px; border-radius: 8px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--faint); font-weight: 700; flex-shrink: 0; }
+  .cp-thumb { width: 84px; height: 64px; border-radius: 10px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--faint); font-weight: 700; flex-shrink: 0; }
   .cp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .cp-thumb.video { background: #2A2624; color: #D8D3CB; gap: 5px; cursor: pointer; letter-spacing: .06em; }
+  .cp-thumb.video .play-icon { width: 20px; height: 20px; background: rgba(255,255,255,.14); border-radius: 50%; padding: 4px; }
   .cp-file-name { font-size: 14px; font-weight: 600; }
   .cp-file-sub { font-size: 12px; color: var(--faint); margin-top: 2px; }
   .cp-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .cp-player { width: 100%; margin: 4px 0 6px; }
+  .cp-player video { width: 100%; max-height: 60vh; display: block; background: #141211; border-radius: 10px; outline: none; }
+  .cp-player .small { margin-top: 6px; }
+
+  /* checklist + quote (kept from before) */
   .cp-sec { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
   .cp-sec:first-of-type { border-top: none; }
-  .cp-sec select, .cp-sec input, .cp textarea { width: 100%; height: 36px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-family: var(--font); font-size: 13.5px; color: var(--ink); background: var(--surface); }
-  .cp textarea { height: auto; padding: 8px 10px; }
+  .cp-sec select, .cp-sec input, .cp textarea, .cp-modal textarea, .cp-modal input { width: 100%; height: 36px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-family: var(--font); font-size: 13.5px; color: var(--ink); background: var(--surface); }
+  .cp textarea, .cp-modal textarea { height: auto; padding: 8px 10px; }
   .cp-sec .lab { font-size: 13px; font-weight: 700; }
-  .cp-foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 30px; }
   .stage-tracker { min-width: 0; width: 100%; align-items: stretch; }
   .ok-msg { background: #E9F1E9; color: #4C6B4F; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; font-weight: 600; margin-top: 12px; }
+
+  /* approved & locked */
+  .ap-item { display: flex; gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--border); }
+  .ap-item:first-of-type { border-top: 0; }
+  .ap-ic { width: 34px; height: 34px; border-radius: 10px; background: #E9F1E9; color: #3F6B48; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+  .ap-ic img { width: 100%; height: 100%; object-fit: cover; }
+  .ap-ic svg { width: 18px; height: 18px; }
+  .ap-name { font-size: 14px; font-weight: 600; }
+  .ap-sub { font-size: 12px; color: var(--faint); margin-top: 2px; }
+  .ap-lock { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #3F6B48; background: #E9F1E9; border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
+  .ap-lock svg { width: 12px; height: 12px; }
+  .ap-sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; margin-top: 6px; }
+  .ap-sum div { font-size: 12.5px; color: var(--muted); } .ap-sum b { color: var(--ink); font-weight: 600; }
+  .cr-cta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  .cr-cta .cp-sub { flex: 1; min-width: 200px; }
+  .cr-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--border); font-size: 13.5px; line-height: 1.45; }
+  .cr-row .st { margin-left: auto; flex-shrink: 0; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
+  .st.pending { background: #EEF3F7; color: #3E5A73; } .st.approved { background: #E9F1E9; color: #3F6B48; } .st.declined { background: #F6E3E1; color: #8E3F38; }
+  .cr-reply { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+
+  /* modal */
+  .cp-modal-back { position: fixed; inset: 0; background: rgba(29,25,24,.45); z-index: 60; display: none; }
+  .cp-modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; background: var(--surface); border-radius: 16px; z-index: 61; display: none; padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .cp-modal.open, .cp-modal-back.open { display: block; }
+  .cp-modal h3 { font-size: 17px; margin: 0 0 6px; }
+  .cp-modal .opt { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; margin-top: 6px; cursor: pointer; font-size: 13.5px; }
+  .cp-modal .opt.on { border-color: var(--ink); background: var(--bg); }
+  .cp-modal .opt input { width: auto; height: auto; }
+  .cp-modal .m-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+
+  .cp-foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 30px; line-height: 1.6; }
+  .cp-foot img { height: 20px; opacity: .8; display: block; margin: 0 auto 8px; }
+
   @media (max-width: 600px) {
+    .cp { padding: 16px 14px 60px; }
+    .cp-head { gap: 14px; padding-bottom: 16px; }
+    .cp-client { font-size: 22px; }
+    .cp-card { padding: 16px 16px; border-radius: 14px; }
     .cp-sec { grid-template-columns: 1fr; } .cp-actions { margin-left: 0; }
     .q-thead { display: none; }
     .q-row { grid-template-columns: auto auto 1fr !important; gap: 4px 10px; }
@@ -40,16 +165,28 @@
     .q-row > div:nth-child(2) { text-align: left !important; color: var(--muted); }
     .q-row > div:nth-child(3) { color: var(--muted); }
     .stage-col span { font-size: 9.5px; }
+    .cg-cols { grid-template-columns: 84px 1fr; } .ccg-labels .cg-lab { font-size: 11.5px; }
+    .nf { grid-template-columns: 18px 1fr auto 12px; gap: 8px; padding: 8px 4px; font-size: 13px; }
+    .nt-dot { width: 16px; height: 16px; }
+    .nf-when { font-size: 11px; } .nf-tag { font-size: 9.5px; padding: 2px 6px; }
   }
 </style>
 </head>
 <body>
-  <div class="cp" id="cp"><div class="empty">Loading your project…</div></div>
+  <div class="cp-splash" id="splash">
+    <img class="sp-mark" src="logo-mark.png" alt=""/>
+    <img class="sp-word" src="logo-wordmark.png" alt="RUF"/>
+    <div class="sp-bar"><i></i></div>
+    <div class="sp-text" id="spText">Opening your project</div>
+  </div>
+  <div class="cp" id="cp"></div>
   <div class="toast" id="toast"></div>
+  <div class="cp-modal-back" id="mBack" onclick="closeModal()"></div>
+  <div class="cp-modal" id="mBox"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="js/config.js?v=2026.11.17"></script>
+  <script src="js/config.js?v=2026.11.17c"></script>
   <script>
   (() => {
     const CFG = window.RUF_CONFIG; firebase.initializeApp(CFG.firebase); const db = firebase.firestore();
@@ -58,55 +195,164 @@
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const fmt = s => { if (!s) return '—'; const d = new Date(s.slice(0,10) + 'T00:00:00'); return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear(); };
+    const fmtShort = s => { if (!s) return ''; const d = new Date(s.slice(0,10) + 'T00:00:00'); return d.getDate() + ' ' + MONTHS[d.getMonth()]; };
     const kwd = n => (Number(n) || 0).toLocaleString('en-KW', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' KWD';
     const STAGES = ['Design','Review','Production','Install','Done'], STAGE_FULL = ['Design','Client review','Production','Installation','Complete'];
-    let P = null; const done = {};
+    const PHASES = [['design','Design'],['review','Client review'],['production','Production'],['install','Installation']];
+    const PLAY_ICON = '<svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
+    const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+    const LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+    let P = null; const done = {}; let showAllUpdates = false; let lastSeen = null;
     let toastT; const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600); };
+    const openedAt = Date.now();
+    function hideSplash() { const wait = Math.max(0, 1300 - (Date.now() - openedAt)); setTimeout(() => { const s = $('splash'); s.classList.add('out'); setTimeout(() => s.remove(), 500); }, wait); }
+    window.closeModal = () => { $('mBox').classList.remove('open'); $('mBack').classList.remove('open'); };
+    const openModal = html => { $('mBox').innerHTML = html; $('mBox').classList.add('open'); $('mBack').classList.add('open'); };
 
     function track(idx) { return '<div class="stage-track">' + STAGES.map((s, i) => { const c = i < idx ? 'done' : i === idx ? 'current' : ''; return '<div class="stage-col ' + c + '"><div class="dot ' + c + '"></div><span>' + s + '</span></div>'; }).join('') + '</div>'; }
 
-    async function load() {
-      if (!token) { $('cp').innerHTML = '<div class="empty">This link is missing its code. Please ask for the link again.</div>'; return; }
-      const snap = await db.collection('portal').doc(token).get();
-      if (!snap.exists) { $('cp').innerHTML = '<div class="empty">This link is no longer valid. Please ask for a new one.</div>'; return; }
-      P = snap.data(); render();
+    // ---- Gantt: the four phases between project start and handover, with today marked ----
+    function gantt() {
+      const ph = P.phases; if (!ph || !PHASES.every(([k]) => ph[k] && ph[k].start && ph[k].end)) return '';
+      const d0 = s => new Date(s.slice(0, 10) + 'T00:00:00');
+      const starts = PHASES.map(([k]) => d0(ph[k].start)), ends = PHASES.map(([k]) => d0(ph[k].end));
+      const min = new Date(Math.min(...starts)), max = new Date(Math.max(...ends)); const span = Math.max(1, (max - min) / 864e5);
+      const pct = d => Math.max(0, Math.min(100, ((d - min) / 864e5) / span * 100));
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const stage = P.status === 'done' ? 4 : (P.stage || 0);
+      // month ticks
+      let months = ''; const m = new Date(min.getFullYear(), min.getMonth() + 1, 1);
+      while (m <= max) { months += '<span style="left:' + pct(m).toFixed(1) + '%">' + MONTHS[m.getMonth()] + '</span>'; m.setMonth(m.getMonth() + 1); }
+      if (!months) months = '<span style="left:50%">' + MONTHS[min.getMonth()] + '</span>';
+      const todayIn = today >= min && today <= max;
+      const cls = i => stage === 4 || i < stage ? 'done' : i === stage ? 'cur' : '';
+      const labels = '<div class="ccg-labels"><div class="cg-lab hdr"></div>' + PHASES.map(([k, label], i) => '<div class="cg-lab ' + cls(i) + '">' + label + '</div>').join('') + '</div>';
+      const lanes = PHASES.map(([k, label], i) => {
+        const l = pct(starts[i]), w = Math.max(1.5, pct(ends[i]) - l);
+        return '<div class="cg-lane"><div class="cg-bar ' + cls(i) + '" style="left:' + l.toFixed(1) + '%;width:' + w.toFixed(1) + '%" title="' + esc(label + ': ' + fmt(ph[k].start) + ' – ' + fmt(ph[k].end)) + '"></div></div>';
+      }).join('');
+      return '<div class="cg"><div class="cg-cols">' + labels + '<div class="ccg-lanes"><div class="cg-months">' + months + '</div>' + lanes +
+        (todayIn ? '<div class="cg-today" style="left:' + pct(today).toFixed(2) + '%"><b>Today</b></div>' : '') + '</div></div>' +
+        '<div class="cg-dates"><span>Started <b>' + fmt(P.start || ph.design.start) + '</b></span><span>Planned handover <b>' + fmt(P.handover || ph.install.end) + '</b></span></div></div>';
     }
+
+    // where each kind of update points to on this page
+    const TARGET = { approval: 'todo', todo: 'todo', approved: 'approved', stage: 'timeline', file: 'files', info: null };
+    function notifications(ctx) {
+      const items = [];
+      // things to do first — these stay at the top until they're done
+      const pend = ctx.elevPending.filter(f => f.status === 'awaiting' && !done['f_' + f.id]);
+      if (pend.length) items.push({ id: 'todo-drawings', todo: true, type: 'approval', text: pend.length === 1 ? 'Approve the drawing ' + esc(pend[0].name) + ' or ask for changes' : pend.length + ' drawings are waiting for your approval', go: 'todo' });
+      if (ctx.clOpen && !ctx.c.clientConfirmedAt && !done.checklist) items.push({ id: 'todo-checklist', todo: true, type: 'todo', text: 'Fill in your section checklist' + (ctx.c.deadline ? ' by ' + fmt(ctx.c.deadline) : ''), go: 'todo' });
+      if (ctx.qOpen && !done.quote) items.push({ id: 'todo-quote', todo: true, type: 'todo', text: 'Review quotation ' + esc(ctx.q.number) + ' — ' + kwd(ctx.q.totals.total), go: 'todo' });
+      (P.log || []).forEach(u => {
+        let go = TARGET[u.type] === undefined ? null : TARGET[u.type];
+        if (u.type === 'approval' && !pend.length) go = 'approved';      // the drawing is no longer waiting → show where it ended up
+        if (go && !ctx.has[go]) go = null;
+        items.push({ id: u.id || u.at, type: u.type || 'info', at: u.at, text: esc(u.text), go, unread: !!(lastSeen && u.at > lastSeen) });
+      });
+      const todoN = items.filter(i => i.todo).length;
+      const list = showAllUpdates ? items : items.slice(0, Math.max(5, todoN + 2));
+      const row = n => '<div class="nf' + (n.todo ? ' todo' : '') + (n.unread ? ' unread' : '') + (n.go ? '' : ' static') + '" id="nf_' + esc(n.id) + '"' + (n.go ? ' onclick="jump(\'' + n.go + '\')"' : '') + '>' +
+        '<i class="nt-dot ' + esc(n.type) + '"></i><div class="nf-text">' + n.text + '</div>' + (n.todo ? '<span class="nf-tag">To do</span>' : '<span class="nf-when">' + fmtShort(n.at) + '</span>') + '<span class="nf-go">›</span></div>';
+      if (!items.length) return '<div class="cp-card" id="updates"><div class="cp-card-head"><div><div class="cp-title-sm">Notifications</div><div class="cp-h">Nothing yet</div></div></div><div class="cp-sub">Updates about your project will appear here.</div></div>';
+      const unread = items.filter(i => i.unread).length;
+      return '<div class="cp-card" id="updates"><div class="cp-card-head"><div><div class="cp-title-sm">Notifications</div><div class="cp-h">' + (todoN ? (todoN === 1 ? 'One thing to do' : todoN + ' things to do') : 'You\'re up to date') + '</div></div><div class="cp-sub">' + (unread ? unread + ' new' : '') + '</div></div>' +
+        '<div class="nf-list">' + list.map(row).join('') + '</div>' +
+        (items.length > list.length || (showAllUpdates && items.length > 5) ? '<div class="nt-more" onclick="toggleUpdates()">' + (showAllUpdates ? 'Show fewer' : 'Show all ' + items.length) + '</div>' : '') + '</div>';
+    }
+    // scroll to a section and flash it so the eye lands in the right place
+    window.jump = id => { const el = $(id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); };
+    window.toggleUpdates = () => { showAllUpdates = !showAllUpdates; render(); const u = $('updates'); if (u) u.scrollIntoView({ block: 'nearest' }); };
+
+    async function load() {
+      if (!token) { $('cp').innerHTML = '<div class="empty">This link is missing its code. Please ask for the link again.</div>'; hideSplash(); return; }
+      const snap = await db.collection('portal').doc(token).get();
+      if (!snap.exists) { $('cp').innerHTML = '<div class="empty">This link is no longer valid. Please ask for a new one.</div>'; hideSplash(); return; }
+      P = snap.data();
+      try { lastSeen = localStorage.getItem('ruf_seen_' + token); localStorage.setItem('ruf_seen_' + token, new Date().toISOString()); } catch (e) { lastSeen = null; }
+      render(); hideSplash();
+    }
+
     function render() {
       const idx = P.status === 'done' ? 5 : P.stage;
-      let h = '<div class="cp-head"><div><div class="cp-brand">' + esc(P.company) + '</div><div class="small">Project page for</div><div class="detail-title" style="font-size:20px;">' + esc(P.client) + '</div><div class="small">' + esc(P.products.join(' + ')) + (P.description ? ' · ' + esc(P.description) : '') + '</div></div></div>';
-      h += '<div class="cp-card"><div class="cp-title">Where your project is</div><div class="stage-tracker"><div class="stage-current-label">' + STAGE_FULL[Math.min(P.stage, 4)] + '</div>' + track(idx) + '</div></div>';
+      const files = P.files || [];
+      const elevPending = files.filter(f => f.isElevation && f.status !== 'approved'), elevApproved = files.filter(f => f.isElevation && f.status === 'approved');
+      const other = files.filter(f => !f.isElevation);
+      const c = P.checklist, q = P.quote;
+      const clOpen = c && !c.teamConfirmedAt, clLocked = c && !!c.teamConfirmedAt;
+      const qOpen = q && q.status !== 'accepted', qLocked = q && q.status === 'accepted';
+      const crs = P.changeRequests || [];
 
-      // files
-      const elev = P.files.filter(f => f.isElevation), other = P.files.filter(f => !f.isElevation);
-      if (elev.length) h += '<div class="cp-card"><div class="cp-title">Drawings for your approval</div><div class="small" style="margin-bottom:8px;">Open each one, then approve it or tell us what to change.</div>' + elev.map(f => fileRow(f, true)).join('') + '</div>';
-      if (other.length) h += '<div class="cp-card"><div class="cp-title">Files shared with you</div>' + other.map(f => fileRow(f, false)).join('') + '</div>';
+      // header
+      let h = '<div class="cp-head"><div class="cp-logo"><img class="lg-mark" src="logo-mark.png" alt="RUF"/><div class="lg-div"></div><img class="lg-word" src="logo-wordmark.png" alt="RUF"/></div>' +
+        '<div class="cp-title"><div class="cp-eyebrow">Project page</div><div class="cp-client">' + esc(P.client) + '</div><div class="cp-prod">' + esc((P.products || []).join(' + ')) + (P.description ? ' · ' + esc(P.description) : '') + '</div></div></div>';
 
-      // checklist
-      if (P.checklist) {
-        const c = P.checklist; const locked = !!c.teamConfirmedAt;
-        h += '<div class="cp-card"><div class="cp-title">What goes in each section?</div><div class="small" style="margin-bottom:10px;line-height:1.5;">Tell us what you need in each numbered section' + (c.deadline ? ' by <b>' + fmt(c.deadline) + '</b>' : '') + '. Pick an option or choose "Something else" and describe it. ' + (locked ? 'This checklist is now confirmed and in production.' : c.clientConfirmedAt ? 'You confirmed this on ' + fmt(c.clientConfirmedAt) + ' — you can still send corrections below.' : '') + '</div>';
-        h += c.sections.map((s, i) => '<div class="cp-sec"><div class="lab">' + esc(s.label) + '</div><div>' + (locked ? esc(s.choice || '—') : '<select id="cl_' + i + '" onchange="clPick(' + i + ')"><option value="">— choose —</option>' + c.options.map(o => '<option' + (s.choice === o && !s.custom ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '<option value="__custom"' + (s.custom ? ' selected' : '') + '>Something else…</option></select><input type="text" id="clc_' + i + '" style="margin-top:6px;' + (s.custom ? '' : 'display:none;') + '" placeholder="Describe what you\'d like here" value="' + esc(s.custom ? s.choice : '') + '"/>') + '</div><div>' + (locked ? '<span class="small">' + esc(s.note || '') + '</span>' : '<input type="text" id="cln_' + i + '" placeholder="Any note (optional)" value="' + esc(s.note || '') + '"/>') + '</div></div>').join('');
-        if (!locked) h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;"><button class="btn-secondary" onclick="sendChecklist(false)">Save my answers</button><button class="btn-primary" onclick="sendChecklist(true)">Confirm — I\'m happy with these</button></div><div class="small" style="margin-top:8px;">Confirming lets the workshop start production. After that, changes go through a change request.</div>';
-        if (done.checklist) h += '<div class="ok-msg">Thank you — your answers were sent to the team.</div>';
+      // which sections exist on this page (notifications only link to sections that are there)
+      const hasApproved = !!(elevApproved.length || (c && c.teamConfirmedAt) || (q && q.status === 'accepted') || crs.length);
+      const has = { todo: true, timeline: true, approved: hasApproved, files: !!other.length };
+
+      // 1 · notifications (things to do first, then what's happened) — one line each, tap to jump
+      h += notifications({ elevPending, clOpen, c, qOpen, q, has });
+
+      // 2 · timeline
+      h += '<div class="cp-card" id="timeline"><div class="cp-card-head"><div><div class="cp-title-sm">Timeline</div><div class="cp-h">Where your project is</div></div><div class="stage-current-label">' + STAGE_FULL[Math.min(P.stage || 0, 4)] + (P.status === 'done' ? ' ✓' : '') + '</div></div>' +
+        '<div class="tl-track"><div class="stage-tracker">' + track(idx) + '</div></div>' + gantt() + '</div>';
+
+      // 3 · to-do list — everything that needs the client, in detail
+      const todoBlocks = [];
+      if (elevPending.length) todoBlocks.push('<div class="td-block" id="drawings"><div class="td-head"><span class="td-num">#</span><span class="td-title">' + (elevPending.length === 1 ? 'Approve the drawing' : 'Approve the drawings') + '</span><span class="td-meta">open each one, then approve it or tell us what to change</span></div>' + elevPending.map(f => fileRow(f, true)).join('') + '</div>');
+      if (clOpen) {
+        let cl = '<div class="td-block" id="checklist"><div class="td-head"><span class="td-num">#</span><span class="td-title">Fill in the section checklist</span>' + (c.deadline ? '<span class="td-meta">by <b>' + fmt(c.deadline) + '</b></span>' : '') + '</div>' +
+          '<div class="cp-sub" style="margin-bottom:10px;">Pick an option for each numbered section, or choose "Something else" and describe it. ' + (c.clientConfirmedAt ? 'You confirmed this on ' + fmt(c.clientConfirmedAt) + ' — you can still send corrections below.' : '') + '</div>';
+        cl += c.sections.map((s, i) => '<div class="cp-sec"><div class="lab">' + esc(s.label) + '</div><div><select id="cl_' + i + '" onchange="clPick(' + i + ')"><option value="">— choose —</option>' + c.options.map(o => '<option' + (s.choice === o && !s.custom ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '<option value="__custom"' + (s.custom ? ' selected' : '') + '>Something else…</option></select><input type="text" id="clc_' + i + '" style="margin-top:6px;' + (s.custom ? '' : 'display:none;') + '" placeholder="Describe what you\'d like here" value="' + esc(s.custom ? s.choice : '') + '"/></div><div><input type="text" id="cln_' + i + '" placeholder="Any note (optional)" value="' + esc(s.note || '') + '"/></div></div>').join('');
+        cl += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;"><button class="btn-secondary" onclick="sendChecklist(false)">Save my answers</button><button class="btn-primary" onclick="sendChecklist(true)">Confirm — I\'m happy with these</button></div><div class="cp-sub" style="margin-top:8px;">Confirming lets the workshop start production. After that, changes go through a change request.</div>';
+        if (done.checklist) cl += '<div class="ok-msg">Thank you — your answers were sent to the team.</div>';
+        todoBlocks.push(cl + '</div>');
+      }
+      if (qOpen) {
+        const t = q.totals;
+        let qh = '<div class="td-block" id="quote"><div class="td-head"><span class="td-num">#</span><span class="td-title">Review quotation ' + esc(q.number) + '</span><span class="td-meta">version ' + q.version + ' · valid until ' + fmt(q.validUntil) + '</span></div>' + (q.note ? '<div style="font-size:13.5px;margin-bottom:10px;line-height:1.5;">' + esc(q.note) + '</div>' : '') + quoteTable(q, t) +
+          '<div class="cp-sub" style="margin-top:12px;"><b>Included:</b> ' + esc(q.included) + '<br><b>Not included:</b> ' + esc(q.excluded) + '<br><b>Estimated duration:</b> ' + esc(q.duration) + '</div>';
+        if (done.quote) qh += '<div class="ok-msg">Thank you — your response was sent to the team.</div>';
+        else qh += '<div style="margin-top:14px;"><textarea id="qComment" rows="2" placeholder="Anything you\'d like changed? (optional)"></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;"><button class="btn-secondary" onclick="quoteDecision(\'changes\')">Request changes</button><button class="btn-primary" onclick="quoteDecision(\'accepted\')">Accept quotation</button></div></div>';
+        todoBlocks.push(qh + '</div>');
+      }
+      h += '<div class="cp-card" id="todo"><div class="cp-card-head"><div><div class="cp-title-sm">To-do list</div><div class="cp-h">' + (todoBlocks.length ? (todoBlocks.length === 1 ? 'One thing needs you' : todoBlocks.length + ' things need you') : 'Nothing to do right now') + '</div></div></div>' +
+        (todoBlocks.length ? todoBlocks.map((b, i) => b.replace('<span class="td-num">#</span>', '<span class="td-num">' + (i + 1) + '</span>')).join('')
+          : '<div class="td-empty"><div class="ap-ic">' + CHECK + '</div><div>You\'re all caught up. When a drawing, the checklist or a quotation needs you, it will show up here and in your notifications.</div></div>') + '</div>';
+
+      // approved & locked
+      const approvedItems = [];
+      elevApproved.forEach(f => approvedItems.push({ kind: 'file', id: f.id, label: f.name, sub: 'Drawing · approved', thumb: /\.(png|jpe?g|gif|webp)$/i.test(f.name) ? f.url : null, url: f.url }));
+      if (clLocked) approvedItems.push({ kind: 'checklist', id: 'checklist', label: 'Section checklist', sub: 'Confirmed on ' + fmt(c.clientConfirmedAt || c.teamConfirmedAt) + ' · in production', sections: c.sections });
+      if (qLocked) approvedItems.push({ kind: 'quote', id: q.number, label: 'Quotation ' + q.number, sub: 'Version ' + q.version + ' · ' + kwd(q.totals.total) + ' · accepted' });
+      if (approvedItems.length || crs.length) {
+        h += '<div class="cp-card" id="approved"><div class="cp-card-head"><div><div class="cp-title-sm">Agreed</div><div class="cp-h">What you\'ve approved</div></div>' + (approvedItems.length ? '<div class="cp-sub">' + approvedItems.length + (approvedItems.length === 1 ? ' item' : ' items') + '</div>' : '') + '</div>';
+        if (approvedItems.length) {
+          h += '<div class="cp-sub" style="margin-bottom:6px;">These are locked so the workshop can build exactly what you agreed. Need something different? Send a change request and we\'ll confirm whether it\'s possible.</div>';
+          h += approvedItems.map(it => '<div class="ap-item"><div class="ap-ic">' + (it.thumb ? '<img src="' + esc(it.thumb) + '" alt=""/>' : CHECK) + '</div><div style="min-width:0;flex:1;"><div class="ap-name">' + (it.url ? '<a href="' + esc(it.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">' + esc(it.label) + '</a>' : esc(it.label)) + '</div><div class="ap-sub">' + esc(it.sub) + '</div>' +
+            (it.sections ? '<div class="ap-sum">' + it.sections.map(s => '<div>' + esc(s.label) + ': <b>' + esc(s.choice || '—') + '</b></div>').join('') + '</div>' : '') + '</div><span class="ap-lock">' + LOCK + 'Locked</span></div>').join('');
+          h += '<div class="cr-cta"><div class="cp-sub">Changed your mind about something above?</div><button class="btn-primary" onclick="openChangeRequest()">Request a change</button></div>';
+        }
+        if (crs.length) {
+          h += '<div class="cp-title-sm" style="margin-top:16px;margin-bottom:4px;">Your change requests</div>' + crs.slice().reverse().map(r => '<div class="cr-row"><div><b>' + esc(r.item && r.item.label || 'Item') + '</b> — ' + esc(r.text) + '<div class="cp-sub" style="font-size:12px;">' + fmt(r.at) + '</div>' + (r.reply ? '<div class="cr-reply">RUF: ' + esc(r.reply) + '</div>' : '') + '</div><span class="st ' + esc(r.status || 'pending') + '">' + (r.status === 'approved' ? 'Approved' : r.status === 'declined' ? 'Declined' : 'Pending') + '</span></div>').join('');
+        }
         h += '</div>';
       }
 
-      // quotation
-      if (P.quote) {
-        const q = P.quote, t = q.totals;
-        h += '<div class="cp-card"><div class="cp-title">Quotation ' + esc(q.number) + ' <span class="small">· version ' + q.version + ' · valid until ' + fmt(q.validUntil) + '</span></div>' + (q.note ? '<div style="font-size:13.5px;margin-bottom:10px;line-height:1.5;">' + esc(q.note) + '</div>' : '') +
-          '<div class="q-table"><div class="q-thead" style="grid-template-columns:1fr 60px 70px 110px;"><div>Description</div><div style="text-align:right">Qty</div><div>Unit</div><div style="text-align:right">Total</div></div>' + q.items.map(it => '<div class="q-row" style="grid-template-columns:1fr 60px 70px 110px;padding:10px 12px;"><div style="font-size:13px;">' + esc(it.desc) + '</div><div style="text-align:right;font-size:13px;">' + esc(it.qty) + '</div><div style="font-size:13px;">' + esc(it.unit) + '</div><div class="q-line-total">' + kwd((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)) + '</div></div>').join('') + '</div>' +
-          '<div class="np-summary-card" style="margin-top:12px;">' + (t.disc ? '<div class="np-sum-row" style="border-top:none;"><span>Subtotal</span><span>' + kwd(t.sub) + '</span></div><div class="np-sum-row"><span>Discount</span><span>− ' + kwd(t.disc) + '</span></div>' : '') + '<div class="np-sum-row q-total" style="' + (t.disc ? '' : 'border-top:none;') + '"><span>Total</span><span>' + kwd(t.total) + '</span></div><div class="np-sum-row"><span>Deposit (' + q.depositPct + '%) on approval</span><span>' + kwd(t.deposit) + '</span></div><div class="np-sum-row"><span>Balance ' + esc(q.balanceTerms.toLowerCase()) + '</span><span>' + kwd(t.total - t.deposit) + '</span></div></div>' +
-          '<div class="small" style="margin-top:12px;line-height:1.5;"><b>Included:</b> ' + esc(q.included) + '<br><b>Not included:</b> ' + esc(q.excluded) + '<br><b>Estimated duration:</b> ' + esc(q.duration) + '</div>';
-        if (q.status === 'accepted') h += '<div class="ok-msg">You accepted this quotation. Thank you!</div>';
-        else if (done.quote) h += '<div class="ok-msg">Thank you — your response was sent to the team.</div>';
-        else h += '<div style="margin-top:14px;"><textarea id="qComment" rows="2" placeholder="Anything you\'d like changed? (optional)"></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;"><button class="btn-secondary" onclick="quoteDecision(\'changes\')">Request changes</button><button class="btn-primary" onclick="quoteDecision(\'accepted\')">Accept quotation</button></div></div>';
-        h += '</div>';
-      }
-      h += '<div class="cp-foot">Questions? Reply to us on WhatsApp — this page updates as your project moves along.</div>';
+      // other shared files
+      if (other.length) h += '<div class="cp-card" id="files"><div class="cp-card-head"><div><div class="cp-title-sm">Files</div><div class="cp-h">Shared with you</div></div></div>' + other.map(f => fileRow(f, false)).join('') + '</div>';
+
+      h += '<div class="cp-foot"><img src="logo-wordmark.png" alt="RUF"/>Questions? Reply to us on WhatsApp — this page updates as your project moves along.</div>';
       $('cp').innerHTML = h;
     }
-    const PLAY_ICON = '<svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
+
+    function quoteTable(q, t) {
+      return '<div class="q-table"><div class="q-thead" style="grid-template-columns:1fr 60px 70px 110px;"><div>Description</div><div style="text-align:right">Qty</div><div>Unit</div><div style="text-align:right">Total</div></div>' + q.items.map(it => '<div class="q-row" style="grid-template-columns:1fr 60px 70px 110px;padding:10px 12px;"><div style="font-size:13px;">' + esc(it.desc) + '</div><div style="text-align:right;font-size:13px;">' + esc(it.qty) + '</div><div style="font-size:13px;">' + esc(it.unit) + '</div><div class="q-line-total">' + kwd((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)) + '</div></div>').join('') + '</div>' +
+        '<div class="np-summary-card" style="margin-top:12px;">' + (t.disc ? '<div class="np-sum-row" style="border-top:none;"><span>Subtotal</span><span>' + kwd(t.sub) + '</span></div><div class="np-sum-row"><span>Discount</span><span>− ' + kwd(t.disc) + '</span></div>' : '') + '<div class="np-sum-row q-total" style="' + (t.disc ? '' : 'border-top:none;') + '"><span>Total</span><span>' + kwd(t.total) + '</span></div><div class="np-sum-row"><span>Deposit (' + q.depositPct + '%) on approval</span><span>' + kwd(t.deposit) + '</span></div><div class="np-sum-row"><span>Balance ' + esc(q.balanceTerms.toLowerCase()) + '</span><span>' + kwd(t.total - t.deposit) + '</span></div></div>';
+    }
+
     function fileRow(f, approvable) {
       const img = /\.(png|jpe?g|gif|webp)$/i.test(f.name), vid = /\.(mp4|m4v|mov|webm)$/i.test(f.name);
       const st = f.status === 'approved' ? 'You approved this' : f.status === 'declined' ? 'You asked for changes' : f.status === 'awaiting' ? 'Waiting for your approval' : '';
@@ -114,7 +360,7 @@
       const thumb = vid ? '<a class="cp-thumb video" href="' + esc(f.url) + '" onclick="return playVideo(\'' + esc(f.id) + '\', this.href)" title="Play">' + PLAY_ICON + ext + '</a>'
         : '<a class="cp-thumb" href="' + esc(f.url) + '" target="_blank" rel="noopener">' + (img ? '<img src="' + esc(f.url) + '" alt=""/>' : ext) + '</a>';
       return '<div class="cp-file">' + thumb + '<div><div class="cp-file-name"><a href="' + esc(f.url) + '"' + (vid ? ' onclick="return playVideo(\'' + esc(f.id) + '\', this.href)"' : ' target="_blank" rel="noopener"') + ' style="color:inherit;text-decoration:none;">' + esc(f.name) + '</a></div><div class="cp-file-sub">' + esc(f.folder) + (st ? ' · ' + st : '') + (vid ? ' · tap to watch' : '') + '</div></div>' +
-        (approvable && f.status !== 'approved' && !done['f_' + f.id] ? '<div class="cp-actions"><button class="btn-secondary" style="height:32px;font-size:12.5px;" onclick="fileDecision(\'' + f.id + '\',\'declined\')">Ask for changes</button><button class="btn-primary" style="height:32px;font-size:12.5px;" onclick="fileDecision(\'' + f.id + '\',\'approved\')">Approve</button></div>' : (done['f_' + f.id] ? '<div class="cp-actions"><span class="cl-pill filled">Sent</span></div>' : '')) +
+        (approvable && f.status !== 'approved' && !done['f_' + f.id] ? '<div class="cp-actions"><button class="btn-secondary" style="height:32px;font-size:12.5px;" onclick="askChanges(\'' + esc(f.id) + '\')">Ask for changes</button><button class="btn-primary" style="height:32px;font-size:12.5px;" onclick="fileDecision(\'' + esc(f.id) + '\',\'approved\')">Approve</button></div>' : (done['f_' + f.id] ? '<div class="cp-actions"><span class="cl-pill filled">Sent</span></div>' : '')) +
         (vid ? '<div class="cp-player" id="vp_' + esc(f.id) + '" style="display:none;"></div>' : '') + '</div>';
     }
     // plays a shared video right here on the page (no download); falls back to opening the file if the browser can't decode it
@@ -129,6 +375,7 @@
       setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
       return false;
     };
+
     async function respond(type, payload) {
       await db.collection('portalResponses').add({ token, projectId: P.projectId, type, payload, at: new Date().toISOString(), handled: false });
     }
@@ -139,15 +386,54 @@
       if (confirmed && empty) { toast('Please fill in all sections before confirming (' + empty + ' left)'); return; }
       try { await respond('checklist', { sections, confirmed }); done.checklist = true; if (confirmed) P.checklist.clientConfirmedAt = new Date().toISOString(); render(); toast(confirmed ? 'Confirmed — thank you!' : 'Saved and sent'); } catch (e) { toast('Could not send: ' + e.message); }
     };
-    window.fileDecision = async (fileId, decision) => {
-      let comment = ''; if (decision === 'declined') { comment = window.prompt('What would you like changed?') || ''; }
-      try { await respond('elevation', { fileId, decision, comment }); done['f_' + fileId] = true; render(); toast(decision === 'approved' ? 'Approved — thank you!' : 'Sent to the team'); } catch (e) { toast('Could not send: ' + e.message); }
+    window.fileDecision = async (fileId, decision, comment) => {
+      try { await respond('elevation', { fileId, decision, comment: comment || '' }); done['f_' + fileId] = true; closeModal(); render(); toast(decision === 'approved' ? 'Approved — thank you!' : 'Sent to the team'); } catch (e) { toast('Could not send: ' + e.message); }
+    };
+    window.askChanges = fileId => {
+      const f = (P.files || []).find(x => x.id === fileId); if (!f) return;
+      openModal('<h3>What would you like changed?</h3><div class="cp-sub" style="margin-bottom:10px;">' + esc(f.name) + '</div><textarea id="mText" rows="4" placeholder="e.g. Make the middle section wider and add a drawer at the bottom"></textarea>' +
+        '<div class="m-actions"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="fileDecision(\'' + esc(fileId) + '\',\'declined\', document.getElementById(\'mText\').value.trim())">Send to the team</button></div>');
+      setTimeout(() => { const t = $('mText'); if (t) t.focus(); }, 50);
     };
     window.quoteDecision = async decision => {
       const comment = ($('qComment').value || '').trim();
       try { await respond('quote', { decision, comment }); done.quote = true; render(); toast(decision === 'accepted' ? 'Accepted — thank you!' : 'Sent to the team'); } catch (e) { toast('Could not send: ' + e.message); }
     };
-    load().catch(e => { $('cp').innerHTML = '<div class="empty">Could not load: ' + esc(e.message) + '</div>'; });
+
+    // ---- change requests on approved items ----
+    function approvedChoices() {
+      const files = P.files || [], c = P.checklist, q = P.quote, out = [];
+      files.filter(f => f.isElevation && f.status === 'approved').forEach(f => out.push({ kind: 'file', id: f.id, label: f.name }));
+      if (c && c.teamConfirmedAt) c.sections.forEach(s => out.push({ kind: 'checklist', id: 'checklist', label: 'Checklist — ' + s.label + (s.choice ? ' (' + s.choice + ')' : '') }));
+      if (q && q.status === 'accepted') out.push({ kind: 'quote', id: q.number, label: 'Quotation ' + q.number });
+      return out;
+    }
+    let crChoice = 0;
+    window.pickCr = i => { crChoice = i; document.querySelectorAll('.cp-modal .opt').forEach((o, k) => o.classList.toggle('on', k === i)); };
+    window.openChangeRequest = () => {
+      const items = approvedChoices(); if (!items.length) { toast('Nothing approved yet'); return; }
+      crChoice = 0;
+      openModal('<h3>Request a change</h3><div class="cp-sub">Choose what you\'d like to change. The team will confirm whether it\'s possible and reply here.</div>' +
+        '<div style="max-height:40vh;overflow:auto;margin-top:8px;">' + items.map((it, i) => '<label class="opt' + (i === 0 ? ' on' : '') + '" onclick="pickCr(' + i + ')"><input type="radio" name="crItem"' + (i === 0 ? ' checked' : '') + '/> ' + esc(it.label) + '</label>').join('') + '</div>' +
+        '<div style="margin-top:12px;"><textarea id="crText" rows="4" placeholder="Describe the change you\'d like"></textarea></div>' +
+        '<div class="m-actions"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" id="crSend" onclick="sendChangeRequest()">Send request</button></div>');
+      setTimeout(() => { const t = $('crText'); if (t) t.focus(); }, 50);
+    };
+    window.sendChangeRequest = async () => {
+      const items = approvedChoices(); const item = items[crChoice] || items[0]; const text = ($('crText').value || '').trim();
+      if (!text) { toast('Please describe the change'); $('crText').focus(); return; }
+      const btn = $('crSend'); btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        await respond('change', { item: { kind: item.kind, id: item.id, label: item.label }, text: text.slice(0, 600) });
+        P.changeRequests = (P.changeRequests || []).concat([{ id: 'local' + Date.now(), at: new Date().toISOString(), item, text, status: 'pending' }]);
+        closeModal(); render(); toast('Request sent — we\'ll get back to you');
+        const a = $('approved'); if (a) a.scrollIntoView({ block: 'nearest' });
+      } catch (e) { btn.disabled = false; btn.textContent = 'Send request'; toast('Could not send: ' + e.message); }
+    };
+
+    load().catch(e => { $('cp').innerHTML = '<div class="empty">Could not load: ' + esc(e.message) + '</div>'; hideSplash(); });
+    setTimeout(() => { if ($('splash')) { $('spText').textContent = 'Still loading — slow connection'; } }, 8000);
+    setTimeout(() => { if ($('splash') && !P) { $('cp').innerHTML = $('cp').innerHTML || '<div class="empty">This is taking longer than usual. Please check your connection and reload.</div>'; hideSplash(); } }, 25000);
   })();
   </script>
 </body>
