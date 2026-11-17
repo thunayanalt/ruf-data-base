@@ -1969,6 +1969,7 @@
 
   .cl-pill.filled { background: #E9F1E9; color: #4C6B4F; }
   .cl-pill.empty { background: #FBF0DC; color: #A47C2C; }
+  .cl-pill.wait { background: #EEF3F7; color: #3E5A73; }
 
   /* ---------- Activity timeline ---------- */
   .timeline {
@@ -2119,6 +2120,10 @@
 .resp-panel .rp-title { font-size: 13px; font-weight: 700; color: #8A6A22; margin-bottom: 8px; }
 .resp-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #EBD9B4; font-size: 13px; }
 .resp-row:first-of-type { border-top: none; }
+.cr-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; }
+.cr-panel .rp-title { color: var(--muted); }
+.cr-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.cr-item:first-of-type { border-top: none; }
 
 .sched-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
 .sched-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; border-top: 4px solid var(--border); }
