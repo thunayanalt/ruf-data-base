@@ -73,6 +73,7 @@
         if (next === 4) { patch.status = 'done'; patch.completedAt = A.nowISO(); }
         await A.saveProject(p, patch);
         await A.logActivity(p, next === 4 ? 'Project completed' : 'Moved to ' + A.STAGE_FULL[next], 'stage');
+        clientNote(p, next === 4 ? 'Your project is complete — thank you!' : 'Your project moved to ' + A.STAGE_FULL[next], 'stage');
         await A.notify((p.assigned || []).filter(e => e !== S.me.email), p.client + ' moved to ' + A.STAGE_FULL[next], p.id, 'stage');
         await syncPortal(p); refresh(); A.toast('Updated');
       });
@@ -236,6 +237,7 @@
     Object.assign(x, patch); refresh(); A.toast(on ? 'Published — the client can now see it' : 'Unpublished');
     A.bg(A.col('projects').doc(p.id).collection('files').doc(id).update(patch), on ? 'publish' : 'unpublish');
     A.logActivity(p, x.name + (on ? ' published to the client portal' : ' removed from the client portal'), 'file');
+    if (on) clientNote(p, (x.folderId === '2d' ? 'New drawing for your approval: ' : 'New file shared with you: ') + x.name, x.folderId === '2d' ? 'approval' : 'file');
     syncPortal(p);
   }
   function startNewFolder() { $('addFolderCard').classList.add('hidden'); $('newFolderForm').classList.remove('hidden'); setTimeout(() => { const el = $('newFolderName'); if (el) el.focus(); }, 50); }
@@ -285,9 +287,18 @@
     x.status = s; refresh();   // screen first, server in the background
     A.bg(A.col('projects').doc(p.id).collection('files').doc(id).update({ status: s }), 'file status');
     A.logActivity(p, x.name + (s === 'approved' ? ' marked approved' : s === 'awaiting' ? ' awaiting client approval' : ' status cleared'), 'file');
+    if (s === 'approved' && x.shared) clientNote(p, 'Drawing marked as approved: ' + x.name, 'approved');
     syncPortal(p);
   }
   const toggleShare = id => { const x = D.files.find(f => f.id === id); return x ? publishFile(id, !x.shared) : null; };
+
+  // ---- client-facing update log (shown as the "Updates" table on the client's page; never includes internal notes) ----
+  function clientNote(p, text, type) {
+    const e = { id: 'u' + A.uid(), at: A.nowISO(), text: String(text).slice(0, 200), type: type || 'info' };
+    p.clientLog = (p.clientLog || []).concat([e]).slice(-40);
+    A.bg(A.col('projects').doc(p.id).update({ clientLog: p.clientLog }), 'client update');
+    return e;
+  }
 
   // ============================================================
   //  CLIENT CHECKLIST
@@ -336,6 +347,7 @@
     if (first) c.sentAt = A.nowISO(); else c.reminderAt = A.nowISO();
     await A.saveProject(p, { checklist: c, waiting: 'Waiting on client checklist', waitingSince: p.waitingSince || A.nowISO() });
     await A.logActivity(p, first ? 'Checklist sent to client' : 'Checklist reminder sent to client', 'checklist');
+    clientNote(p, first ? 'Checklist ready — please tell us what goes in each section' : 'Reminder: the checklist is waiting for your answers', 'todo');
     await syncPortal(p);
     shareLinkModal('Checklist ' + (first ? 'sent' : 'reminder'), 'Send this link to ' + p.client + ' on WhatsApp. They open it, fill in each section, and press Confirm — no app or login needed.');
     refresh();
@@ -346,6 +358,7 @@
       p.checklist.teamConfirmedAt = A.nowISO();
       await A.saveProject(p, { checklist: p.checklist, stage: Math.max(p.stage, 2), waiting: null, waitingSince: null });
       await A.logActivity(p, 'Checklist confirmed by ' + S.me.name + ' — production started', 'stage');
+      clientNote(p, 'Checklist confirmed — production has started', 'approved');
       await A.notify((p.assigned || []).filter(e => e !== S.me.email), p.client + ': checklist confirmed, production started', p.id, 'stage');
       await syncPortal(p); refresh();
     });
@@ -366,6 +379,7 @@
       refresh(); A.toast('Checklist cancelled');
       A.saveProject(p, Object.assign({ checklist: null }, wasWaiting ? { waiting: null, waitingSince: null } : {}));
       A.logActivity(p, 'Checklist cancelled by ' + A.firstName(S.me.email), 'checklist');
+      if (c.sentAt) clientNote(p, 'The checklist was withdrawn by the team', 'info');
       syncPortal(p);
     }, true, 'Keep checklist');
   }
@@ -377,7 +391,14 @@
     const p = project(); const resp = S.responses.filter(r => r.projectId === p.id);
     let html = '';
     if (resp.length) html += '<div class="resp-panel"><div class="rp-title">Client responses waiting for review</div>' + resp.map(r =>
-      '<div class="resp-row"><div>' + esc(A.V.responseSummary(r)) + '<div class="small">' + A.ago(r.at) + '</div></div><div style="display:flex;gap:6px;"><button class="btn-primary" style="height:30px;font-size:12px;" onclick="app.V.applyResponse(\'' + r.id + '\')">Apply</button><button class="btn-secondary" style="height:30px;font-size:12px;" onclick="app.V.dismissResponse(\'' + r.id + '\')">Dismiss</button></div></div>').join('') + '</div>';
+      '<div class="resp-row"><div>' + esc(A.V.responseSummary(r)) + '<div class="small">' + A.ago(r.at) + '</div></div><div style="display:flex;gap:6px;">' +
+      (r.type === 'change'
+        ? (A.canSeeAll() ? '<button class="btn-primary" style="height:30px;font-size:12px;" onclick="app.V.decideChange(\'' + r.id + '\', true)">Approve change</button><button class="btn-secondary" style="height:30px;font-size:12px;" onclick="app.V.decideChange(\'' + r.id + '\', false)">Decline</button>' : '<span class="small">Waiting for an admin or manager</span>')
+        : '<button class="btn-primary" style="height:30px;font-size:12px;" onclick="app.V.applyResponse(\'' + r.id + '\')">Apply</button><button class="btn-secondary" style="height:30px;font-size:12px;" onclick="app.V.dismissResponse(\'' + r.id + '\')">Dismiss</button>') + '</div></div>').join('') + '</div>';
+    const crs = (p.changeRequests || []).slice().reverse();
+    if (crs.length) html += '<div class="cr-panel"><div class="rp-title">Change requests from the client</div>' + crs.map(c =>
+      '<div class="cr-item"><div><b>' + esc(c.item && c.item.label || 'Item') + '</b> — ' + esc(c.text || '') + '<div class="small">' + A.ago(c.at) + (c.decidedAt ? ' · ' + (c.status === 'approved' ? 'approved' : 'declined') + ' by ' + esc(A.firstName(c.decidedBy)) + ' ' + A.ago(c.decidedAt) : '') + '</div></div>' +
+      '<span class="cl-pill ' + (c.status === 'approved' ? 'filled' : c.status === 'declined' ? 'empty' : 'wait') + '">' + (c.status === 'approved' ? 'Approved' : c.status === 'declined' ? 'Declined' : 'Pending') + '</span></div>').join('') + '</div>';
     const dot = t => t === 'stage' || t === 'created' ? 'done' : (t === 'checklist' || t === 'waiting' || t === 'client' ? 'wait' : '');
     html += '<div class="timeline">' + (D.activity.length ? D.activity.map(a => '<div class="tl-item"><div class="tl-dot ' + dot(a.type) + '"></div><div class="tl-body"><div class="tl-text">' + esc(a.text) + '</div><div class="tl-meta">' + esc(a.by === 'client' ? 'Client' : A.firstName(a.by)) + ' · ' + A.fmtLong(a.at.slice(0, 10)) + ' · ' + A.ago(a.at) + '</div></div></div>').join('') : '<div class="small" style="padding:14px 0;">No activity yet.</div>') + '</div>';
     return html;
@@ -388,6 +409,7 @@
       const f = D.files.find(x => x.id === pl.fileId);
       if (f) { await A.col('projects').doc(p.id).collection('files').doc(f.id).update({ status: pl.decision === 'approved' ? 'approved' : 'declined' }); f.status = pl.decision === 'approved' ? 'approved' : 'declined'; }
       await A.logActivity(p, 'Client ' + (pl.decision === 'approved' ? 'approved ' : 'declined ') + (f ? f.name : 'an elevation') + (pl.comment ? ' — "' + pl.comment + '"' : ''), 'client');
+      if (f) clientNote(p, (pl.decision === 'approved' ? 'You approved ' : 'You asked for changes to ') + f.name, pl.decision === 'approved' ? 'approved' : 'info');
       const shared = D.files.filter(x => x.shared && x.folderId === '2d');
       if (shared.length && shared.every(x => x.status === 'approved') && p.waiting && /elevation/i.test(p.waiting)) await A.saveProject(p, { waiting: null, waitingSince: null });
     } else if (r.type === 'checklist' && p.checklist) {
@@ -395,16 +417,47 @@
       if (pl.confirmed) { p.checklist.clientConfirmedAt = r.at; }
       await A.saveProject(p, { checklist: p.checklist, waiting: pl.confirmed ? null : p.waiting, waitingSince: pl.confirmed ? null : p.waitingSince });
       await A.logActivity(p, pl.confirmed ? 'Client confirmed the checklist' : 'Client filled in checklist answers', 'client');
+      clientNote(p, pl.confirmed ? 'You confirmed the checklist' : 'Your checklist answers were received', pl.confirmed ? 'approved' : 'info');
     } else if (r.type === 'quote' && p.quote) {
       p.quote.status = pl.decision === 'accepted' ? 'accepted' : 'changes';
       (p.quote.history = p.quote.history || []).unshift({ text: 'Version ' + p.quote.version + ' — ' + (pl.decision === 'accepted' ? 'accepted by client' : 'client requested changes') + (pl.comment ? ': ' + pl.comment : ''), by: 'client', at: r.at });
       await A.saveProject(p, { quote: p.quote });
       await A.logActivity(p, 'Quotation ' + (pl.decision === 'accepted' ? 'accepted by client' : 'changes requested by client') + (pl.comment ? ' — "' + pl.comment + '"' : ''), 'client');
+      clientNote(p, pl.decision === 'accepted' ? 'You accepted quotation ' + p.quote.number : 'You asked for changes to the quotation', pl.decision === 'accepted' ? 'approved' : 'info');
     }
     await A.col('portalResponses').doc(id).update({ handled: true, handledBy: S.me.email, handledAt: A.nowISO() });
     S.responses = S.responses.filter(x => x.id !== id); A.updateBadge(); await syncPortal(p); refresh(); A.toast('Applied');
   }
   async function dismissResponse(id) { await A.col('portalResponses').doc(id).update({ handled: true, handledBy: S.me.email, handledAt: A.nowISO() }); S.responses = S.responses.filter(x => x.id !== id); A.updateBadge(); refresh(); }
+  // A change request on something the client already approved: approving it re-opens that item for rework; declining leaves it as agreed.
+  function decideChange(id, approved) {
+    const r = S.responses.find(x => x.id === id); const p = project(); if (!r) return;
+    if (!A.canSeeAll()) { A.toast('Only an admin or manager can decide on change requests'); return; }
+    const pl = r.payload || {}, item = pl.item || {}; const label = item.label || 'this item';
+    A.confirmBox(approved ? 'Approve this change?' : 'Decline this change?',
+      '<b>' + esc(label) + '</b> — “' + esc(pl.text || '') + '”<br><br>' + (approved
+        ? (item.kind === 'file' ? 'The drawing goes back to <b>changes requested</b>; upload the revised version and publish it for approval again.'
+          : item.kind === 'checklist' ? 'The checklist is <b>re-opened</b> (both confirmations are cleared) so the section can be changed and confirmed again.'
+            : item.kind === 'quote' ? 'The quotation goes back to <b>changes requested</b>; send a new version when it\'s ready.' : 'The client will be told the change is approved.')
+        : 'Nothing changes on the project; the client sees that the request was declined.') +
+      '<div class="fld" style="margin-top:12px;"><label>Note to the client (optional)</label><input type="text" id="crReply" placeholder="e.g. We\'ll adjust section 4 and send a new drawing"/></div>',
+      approved ? 'Approve change' : 'Decline', async () => {
+        const reply = ($('crReply') && $('crReply').value || '').trim().slice(0, 300);
+        const cr = { id: 'cr' + A.uid(), at: r.at, item, text: pl.text || '', status: approved ? 'approved' : 'declined', decidedAt: A.nowISO(), decidedBy: S.me.email, reply };
+        p.changeRequests = (p.changeRequests || []).concat([cr]).slice(-60);
+        const patch = { changeRequests: p.changeRequests };
+        if (approved) {
+          if (item.kind === 'file') { const f = D.files.find(x => x.id === item.id); if (f) { f.status = 'declined'; A.bg(A.col('projects').doc(p.id).collection('files').doc(f.id).update({ status: 'declined' }), 'file status'); } }
+          else if (item.kind === 'checklist' && p.checklist) { p.checklist.teamConfirmedAt = null; p.checklist.clientConfirmedAt = null; patch.checklist = p.checklist; }
+          else if (item.kind === 'quote' && p.quote) { p.quote.status = 'changes'; (p.quote.history = p.quote.history || []).unshift({ text: 'Version ' + p.quote.version + ' — change requested by client approved: ' + (pl.text || ''), by: S.me.email, at: A.nowISO() }); patch.quote = p.quote; }
+        }
+        A.saveProject(p, patch);
+        A.logActivity(p, 'Change request ' + (approved ? 'approved' : 'declined') + ' by ' + A.firstName(S.me.email) + ' — ' + label + ': “' + (pl.text || '') + '”', approved ? 'checklist' : 'client');
+        clientNote(p, (approved ? 'Change approved: ' : 'Change declined: ') + label + (reply ? ' — ' + reply : ''), approved ? 'approved' : 'info');
+        A.bg(A.col('portalResponses').doc(id).update({ handled: true, handledBy: S.me.email, handledAt: A.nowISO() }), 'response');
+        S.responses = S.responses.filter(x => x.id !== id); A.updateBadge(); syncPortal(p); refresh(); A.toast(approved ? 'Change approved' : 'Change declined');
+      }, !approved);
+  }
 
   // ============================================================
   //  SCHEDULE + per-project Gantt
@@ -520,6 +573,7 @@
     (q.history = q.history || []).unshift({ text: 'Version ' + q.version + ' — sent to client', by: S.me.email, at: q.sentAt });
     await A.saveProject(p, { quote: q, waiting: 'Waiting on quotation decision', waitingSince: p.waitingSince || A.nowISO() });
     await A.logActivity(p, 'Quotation v' + q.version + ' sent to client — total ' + A.kwd(qTotals(q).total), 'checklist');
+    clientNote(p, 'Quotation ' + q.number + ' (version ' + q.version + ') is ready for your review', 'todo');
     await syncPortal(p);
     shareLinkModal('Quotation sent', 'Send this link to ' + p.client + '. They can review the quotation and accept it or request changes.');
     refresh();
@@ -582,6 +636,9 @@
       files: (D.project && D.project.id === p.id ? D.files : []).filter(f => f.shared).map(f => ({ id: f.id, name: f.name, url: f.url, folder: (p.folders.find(x => x.id === f.folderId) || {}).name || '', status: f.status || null, isElevation: f.folderId === '2d' })),
       checklist: p.checklist && p.checklist.sentAt ? { sections: p.checklist.sections, options: p.checklist.options || A.CHECKLIST_OPTIONS, deadline: p.checklist.deadline, clientConfirmedAt: p.checklist.clientConfirmedAt, teamConfirmedAt: p.checklist.teamConfirmedAt } : null,
       quote: q, updatedAt: A.nowISO(),
+      start: p.start || null, handover: p.handover || null, phases: p.phases || null,
+      log: (p.clientLog || []).slice().reverse(),
+      changeRequests: (p.changeRequests || []).map(c => ({ id: c.id, at: c.at, item: c.item, text: c.text, status: c.status, decidedAt: c.decidedAt || null, reply: c.reply || '' })),
     };
     return A.bg(A.col('portal').doc(p.portalToken).set(snap), 'client portal');
   }
@@ -593,6 +650,6 @@
   }
 
   Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile, videoFailed,
-    createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, cancelChecklist, applyResponse, dismissResponse, phaseChanged, toggleGroup, renderProjectGantt,
+    createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, cancelChecklist, applyResponse, dismissResponse, decideChange, phaseChanged, toggleGroup, renderProjectGantt,
     qSet, qValid, qItem, qAdd, qRemove, qCalc, qSave, qSend, qNewVersion, qPrint, saveSettings, newPortalLink, deleteProject, reopenProject, syncPortal, portalLink });
 })();

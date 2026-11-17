@@ -4,7 +4,7 @@
    ============================================================ */
 window.app = (() => {
   const CFG = window.RUF_CONFIG || {};
-  const APP_VERSION = '2026.11.17';
+  const APP_VERSION = '2026.11.17c';
 
   // ---------- diagnostics (small ring buffer in localStorage; shown at #/diagnostics) ----------
   const T0 = performance.now();

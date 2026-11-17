@@ -108,6 +108,7 @@
     if (r.type === 'checklist') return r.payload && r.payload.confirmed ? 'Checklist submitted and confirmed' : 'Checklist answers received';
     if (r.type === 'elevation') return 'Elevation ' + (r.payload && r.payload.decision === 'approved' ? 'approved' : 'declined') + (r.payload && r.payload.comment ? ' — "' + r.payload.comment + '"' : '');
     if (r.type === 'quote') return 'Quotation ' + (r.payload && r.payload.decision === 'accepted' ? 'accepted' : 'changes requested');
+    if (r.type === 'change') return 'Change request — ' + (r.payload && r.payload.item && r.payload.item.label || 'approved item') + (r.payload && r.payload.text ? ': "' + r.payload.text + '"' : '');
     return 'New response';
   }
   async function sendDigest() {
