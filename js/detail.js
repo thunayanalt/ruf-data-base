@@ -39,6 +39,7 @@
       }).catch(e => A.dlog('detail', 'background refresh failed ' + (e.code || e.message)));
     }
     if (!current()) return;
+    if (sub === 'files') { D.folder = null; D.file = null; }   // the Files tab always opens at the top level
     D.tab = sub || 'files';
     if ((D.tab === 'quote' || D.tab === 'settings') && !A.canSeeAll()) D.tab = 'files';
     $('view').innerHTML = renderDetail();
@@ -108,49 +109,140 @@
     return '<span class="fc-badge' + (unread ? ' new' : '') + '" title="' + n + (n === 1 ? ' comment' : ' comments') + (unread ? ' · new' : '') + '">' + COMMENT_ICON + n + '</span>';
   }
 
+  // ---- folder tree: a folder may have a parentId; files live in the deepest folder ----
+  const foldersOf = p => p.folders || [];
+  const folderById = (p, id) => foldersOf(p).find(f => f.id === id);
+  const childrenOf = (p, pid) => foldersOf(p).filter(f => (f.parentId || null) === (pid || null));
+  function folderPath(p, fid) {            // [root, …, folder] — guards against loops in bad data
+    const out = []; const seen = new Set(); let f = folderById(p, fid);
+    while (f && !seen.has(f.id)) { seen.add(f.id); out.unshift(f); f = f.parentId ? folderById(p, f.parentId) : null; }
+    return out;
+  }
+  const rootOf = (p, fid) => { const path = folderPath(p, fid); return path.length ? path[0].id : fid; };
+  const inElev = x => rootOf(project(), x.folderId) === '2d';        // anything under "2D Sketches & Elevations" is a drawing for the client to approve
+  function subtree(p, fid) {               // ids of the folder and every folder under it
+    const ids = [fid]; const seen = new Set([fid]);
+    for (let i = 0; i < ids.length; i++) childrenOf(p, ids[i]).forEach(c => { if (!seen.has(c.id)) { seen.add(c.id); ids.push(c.id); } });
+    return ids;
+  }
+  const filesDeep = (p, fid) => { const ids = new Set(subtree(p, fid)); return D.files.filter(x => ids.has(x.folderId)); };
+  const pathLabel = (p, fid) => folderPath(p, fid).map(f => f.name).join(' / ');
+  const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
+  function folderCard(p, f, sub) {
+    const files = filesDeep(p, f.id), kids = childrenOf(p, f.id).length;
+    const waiting = files.filter(x => x.status === 'awaiting').length;
+    const unread = files.filter(hasUnread).length;
+    return '<div class="folder-card' + (sub ? ' sub' : '') + '" onclick="app.V.openFolder(\'' + f.id + '\')"><div class="folder-icon">' + FOLDER_ICON + '</div>' +
+      '<div class="folder-name">' + esc(f.name) + '</div><div class="folder-count">' + files.length + (files.length === 1 ? ' file' : ' files') + (kids ? ' · ' + kids + (kids === 1 ? ' folder' : ' folders') : '') + (waiting ? ' · ' + waiting + ' awaiting client' : '') + (unread ? ' · <span class="fc-new">' + unread + (unread === 1 ? ' new comment' : ' new comments') + '</span>' : '') + '</div></div>';
+  }
+  function newFolderForm(parentId) {        // "+ New folder" card that turns into a name box
+    const sub = !!parentId, quick = sub ? ['Bedroom', 'Kitchen', 'Living room', 'Revisions'] : ['Site photos', 'Material samples', 'Client documents', 'Installation photos'];
+    const pid = parentId ? "'" + parentId + "'" : '';
+    return '<div class="folder-card add-folder' + (sub ? ' sub' : '') + '" id="addFolderCard" onclick="app.V.startNewFolder()"><div class="add-folder-plus">+</div><div class="folder-name" style="color:var(--muted);">' + (sub ? 'New subfolder' : 'New folder') + '</div><div class="folder-count">e.g. ' + quick.slice(0, 2).join(', ') + '</div></div>' +
+      '<div class="folder-card new-folder-form' + (sub ? ' sub' : '') + ' hidden" id="newFolderForm"><div class="folder-name" style="margin-bottom:10px;">' + (sub ? 'Name the subfolder' : 'Name the folder') + '</div><input type="text" id="newFolderName" placeholder="e.g. ' + quick[0] + '" onkeydown="if(event.key===\'Enter\'){app.V.createFolder(' + pid + ');} if(event.key===\'Escape\'){app.V.cancelNewFolder();}"/>' +
+      '<div class="quick-row" style="margin-top:8px;">' + quick.map(n => '<span class="quick" onclick="document.getElementById(\'newFolderName\').value=\'' + n + '\'; app.V.createFolder(' + pid + ')">' + n + '</span>').join('') + '</div>' +
+      '<div class="nf-actions"><button class="btn-secondary" onclick="app.V.cancelNewFolder()">Cancel</button><button class="btn-primary" onclick="app.V.createFolder(' + pid + ')">Create</button></div></div>';
+  }
+
   function tabFiles() {
     const p = project(), edit = A.canEditProject(p);
-    if (D.file) return fileView(D.file, edit);
+    // the folder grid stays in the page behind the file viewer, so going back is instant (nothing reloads)
+    if (D.file) return '<div id="folderStage" class="hidden">' + (D.folder ? folderView(D.folder, edit) : rootView(p, edit)) + '</div><div id="fileStage">' + fileView(D.file, edit) + '</div>';
     if (D.folder) return folderView(D.folder, edit);
-    const folders = p.folders || [];
-    let html = '<div class="folder-list">' + folders.map(f => {
-      const files = D.files.filter(x => x.folderId === f.id);
-      const waiting = files.filter(x => x.status === 'awaiting').length;
-      const unread = files.filter(hasUnread).length;
-      return '<div class="folder-card" onclick="app.V.openFolder(\'' + f.id + '\')"><div class="folder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg></div>' +
-        '<div class="folder-name">' + esc(f.name) + '</div><div class="folder-count">' + files.length + (files.length === 1 ? ' file' : ' files') + (waiting ? ' · ' + waiting + ' awaiting client' : '') + (unread ? ' · <span class="fc-new">' + unread + (unread === 1 ? ' new comment' : ' new comments') + '</span>' : '') + '</div></div>';
-    }).join('');
-    if (edit) html += '<div class="folder-card add-folder" id="addFolderCard" onclick="app.V.startNewFolder()"><div class="add-folder-plus">+</div><div class="folder-name" style="color:var(--muted);">New folder</div><div class="folder-count">e.g. Site photos, Material samples</div></div>' +
-      '<div class="folder-card new-folder-form hidden" id="newFolderForm"><div class="folder-name" style="margin-bottom:10px;">Name the folder</div><input type="text" id="newFolderName" placeholder="e.g. Site photos" onkeydown="if(event.key===\'Enter\'){app.V.createFolder();} if(event.key===\'Escape\'){app.V.cancelNewFolder();}"/>' +
-      '<div class="quick-row" style="margin-top:8px;">' + ['Site photos', 'Material samples', 'Client documents', 'Installation photos'].map(n => '<span class="quick" onclick="document.getElementById(\'newFolderName\').value=\'' + n + '\'; app.V.createFolder()">' + n + '</span>').join('') + '</div>' +
-      '<div class="nf-actions"><button class="btn-secondary" onclick="app.V.cancelNewFolder()">Cancel</button><button class="btn-primary" onclick="app.V.createFolder()">Create</button></div></div>';
+    return rootView(p, edit);
+  }
+  function rootView(p, edit) {
+    const folders = childrenOf(p, null);
+    let html = '<div class="folder-list">' + folders.map(f => folderCard(p, f, false)).join('');
+    if (edit) html += newFolderForm(null);
     html += '</div>';
     if (!folders.length) html += '<div class="empty" style="margin-top:14px;">No folders yet.</div>';
     return html;
   }
   function folderView(fid, edit) {
-    const p = project(), f = (p.folders || []).find(x => x.id === fid); if (!f) { D.folder = null; return tabFiles(); }
-    const files = D.files.filter(x => x.folderId === fid);
-    const isElev = fid === '2d';
-    let html = '<div class="detail-back" onclick="app.V.closeFolder()">&larr; Files</div>' +
-      '<div class="folder-head"><div class="folder-title">' + esc(f.name) + ' <span class="small">' + files.length + (files.length === 1 ? ' file' : ' files') + '</span></div>' +
-      (edit ? '<div style="display:flex;gap:8px;"><input type="file" id="fileInput" multiple class="hidden" onchange="app.V.uploadFiles(this.files)"/><button class="upload-btn" onclick="document.getElementById(\'fileInput\').click()">+ Upload</button>' +
+    const p = project(), f = folderById(p, fid); if (!f) { D.folder = null; return tabFiles(); }
+    const files = D.files.filter(x => x.folderId === fid), kids = childrenOf(p, fid), path = folderPath(p, fid);
+    const crumbs = '<span class="crumb" onclick="app.V.closeFolder()">&larr; Files</span>' + path.slice(0, -1).map(a => '<span class="crumb-sep">›</span><span class="crumb" onclick="app.V.openFolder(\'' + a.id + '\')">' + esc(a.name) + '</span>').join('');
+    let html = '<div class="detail-back crumbs">' + crumbs + '</div>' +
+      '<div class="folder-head"><div class="folder-title">' + esc(f.name) + ' <span class="small">' + files.length + (files.length === 1 ? ' file' : ' files') + (kids.length ? ' · ' + kids.length + (kids.length === 1 ? ' folder' : ' folders') : '') + '</span></div>' +
+      (edit ? '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input type="file" id="fileInput" multiple class="hidden" onchange="app.V.uploadFiles(this.files)"/><button class="upload-btn" onclick="document.getElementById(\'fileInput\').click()">+ Upload</button>' +
         (A.canSeeAll() && !['2d', '3d', 'plan'].includes(fid) ? '<button class="btn-secondary" onclick="app.V.deleteFolder(\'' + fid + '\')">Delete folder</button>' : '') + '</div>' : '') + '</div>' +
       '<div class="progress hidden" id="upProgress"><div></div></div><div class="small hidden" id="upStatus" style="margin-top:6px;"></div>';
-    if (!files.length) html += '<div class="folder-empty" style="margin-top:14px;">No files yet.' + (edit ? ' Upload the first one.' : '') + '</div>';
+    // subfolders first
+    if (kids.length || edit) html += '<div class="folder-list subs">' + kids.map(k => folderCard(p, k, true)).join('') + (edit ? newFolderForm(fid) : '') + '</div>';
+    if (!files.length) html += '<div class="folder-empty" style="margin-top:14px;">No files ' + (kids.length ? 'in this folder itself' : 'yet') + '.' + (edit ? ' Upload the first one.' : '') + '</div>';
     else html += '<div class="file-grid" style="margin-top:14px;">' + files.map(x => {
       const img = isImage(x), vid = isVideo(x);
       const st = x.status === 'approved' ? 'Approved' : x.status === 'awaiting' ? 'Awaiting client' : x.status === 'declined' ? 'Declined' : '';
-      return '<div class="file-card clickable" onclick="app.V.openFile(\'' + x.id + '\')"><div class="file-thumb' + (x.status === 'awaiting' ? ' wait' : '') + (vid ? ' video' : '') + '">' + (img ? '<img src="' + attr(x.url) + '" alt=""/>' : (vid ? PLAY_ICON : '') + esc((x.name || '').split('.').pop().toUpperCase())) + commentBadge(x) + '</div>' +
+      return '<div class="file-card clickable" onclick="app.V.openFile(\'' + x.id + '\')"><div class="file-thumb' + (x.status === 'awaiting' ? ' wait' : '') + (vid ? ' video' : '') + '">' + (img ? '<img src="' + attr(x.thumbUrl || x.url) + '" alt="" loading="lazy" decoding="async" data-file="' + x.id + '"/>' : (vid ? PLAY_ICON : '') + esc((x.name || '').split('.').pop().toUpperCase())) + commentBadge(x) + '</div>' +
         '<div class="file-name"><span class="fname">' + esc(x.name) + '</span><br><span class="small">' + A.firstName(x.uploadedBy) + ' · ' + A.ago(x.uploadedAt) + '</span>' +
         ((x.shared || st) ? '<div class="fc-chips">' + (x.shared ? '<span class="fc-chip pub">Published to client</span>' : '') + (st ? '<span class="fc-chip ' + (x.status || '') + '">' + st + '</span>' : '') + '</div>' : '') + '</div></div>';
     }).join('') + '</div>';
+    if (edit) setTimeout(() => backfillThumbs(files), 400);   // older pictures get a small thumbnail made in the background
     return html;
   }
   const isImage = x => /\.(png|jpe?g|gif|webp)$/i.test(x.name || '');
   const isVideo = x => /\.(mp4|m4v|mov|webm)$/i.test(x.name || '');
   const PLAY_ICON = '<svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
   const fmtSize = n => !n ? '' : n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+  // ---- thumbnails: a small JPEG next to each picture so folders open instantly (full-size phone photos take seconds to decode) ----
+  const THUMB_PX = 560, CACHE_LONG = 'public, max-age=31536000, immutable';   // storage paths are unique (timestamp prefix), so caching forever is safe
+  async function makeThumb(blob) {
+    const src = URL.createObjectURL(blob);
+    try {
+      const im = new Image(); im.src = src; await (im.decode ? im.decode() : new Promise((ok, no) => { im.onload = ok; im.onerror = no; }));
+      const w = im.naturalWidth, h = im.naturalHeight; if (!w || !h) throw new Error('no size');
+      const k = Math.min(1, THUMB_PX / Math.max(w, h));
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const out = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.82)); if (!out) throw new Error('toBlob failed');
+      return { blob: out, w, h };
+    } finally { URL.revokeObjectURL(src); }
+  }
+  async function uploadThumb(path, blob) {
+    const ref = A.storage().ref(path + '.thumb.jpg'); const task = ref.put(blob, { contentType: 'image/jpeg', cacheControl: CACHE_LONG });
+    await new Promise((res, rej) => task.on('state_changed', () => { }, rej, res));
+    return task.snapshot.ref.getDownloadURL();
+  }
+  const thumbTried = new Set(); let thumbBusy = false;
+  async function backfillThumbs(files) {
+    if (thumbBusy) return; const p = project(); if (!p) return;
+    const todo = files.filter(x => isImage(x) && !x.thumbUrl && x.url && !thumbTried.has(x.id));
+    if (!todo.length) return; thumbBusy = true;
+    try {
+      for (const x of todo) {
+        thumbTried.add(x.id);
+        if (!D.project || D.project.id !== p.id) break;
+        try {
+          const r = await fetch(x.url); if (!r.ok) throw new Error('HTTP ' + r.status);
+          const t = await makeThumb(await r.blob());
+          const thumbUrl = await uploadThumb(x.path, t.blob);
+          x.thumbUrl = thumbUrl; x.w = t.w; x.h = t.h;
+          A.bg(A.col('projects').doc(p.id).collection('files').doc(x.id).update({ thumbUrl, w: t.w, h: t.h }), 'thumbnail');
+          A.storage().ref(x.path).updateMetadata && A.storage().ref(x.path).updateMetadata({ cacheControl: CACHE_LONG }).catch(() => { });
+          const el = document.querySelector('img[data-file="' + x.id + '"]'); if (el && el.src !== thumbUrl) { el.src = thumbUrl; }
+        } catch (e) { A.dlog('thumb', 'skipped ' + x.name + ': ' + (e.message || e)); }
+      }
+    } finally { thumbBusy = false; }
+  }
+  // the viewer shows the small thumbnail at once, then swaps in the full-size picture when it has loaded
+  function fvUpgrade(el) {
+    const full = el.dataset.full; if (!full || el.dataset.done) return; el.dataset.done = '1';
+    const im = new Image(); im.onload = () => { el.src = full; }; im.src = full;
+  }
+  // ---- download: fetch the bytes and save under the original name (falls back to opening the file if the browser refuses) ----
+  async function downloadFile(id) {
+    const x = D.files.find(f => f.id === id); if (!x) return;
+    const btn = document.getElementById('dlBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+    try {
+      const r = await fetch(x.url); if (!r.ok) throw new Error('HTTP ' + r.status);
+      const b = await r.blob(); const u = URL.createObjectURL(b);
+      const a = document.createElement('a'); a.href = u; a.download = x.name || 'file'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    } catch (e) { A.dlog('download', 'fetch failed, opening instead: ' + (e.message || e)); window.open(x.url, '_blank', 'noopener'); }
+    finally { if (btn) { btn.disabled = false; btn.innerHTML = DL_ICON + 'Download'; } }
+  }
+  const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>';
   // the browser could not decode the video (usually an iPhone HEVC .mov on a PC without the codec) — fall back to opening the file
   function videoFailed(el) {
     const wrap = el.closest('.fv-video-wrap'); if (!wrap) return;
@@ -162,20 +254,21 @@
   function fileView(id, edit) {
     const p = project(), x = D.files.find(f => f.id === id);
     if (!x) { D.file = null; return D.folder ? folderView(D.folder, edit) : tabFiles(); }
-    const f = (p.folders || []).find(z => z.id === x.folderId) || { name: 'Files' };
-    const isElev = x.folderId === '2d', img = isImage(x), vid = isVideo(x), list = commentsOf(x);
+    const f = folderById(p, x.folderId) || { name: 'Files' };
+    const isElev = inElev(x), img = isImage(x), vid = isVideo(x), list = commentsOf(x);
     const st = x.status === 'approved' ? 'Approved by the client' : x.status === 'awaiting' ? 'Awaiting client approval' : x.status === 'declined' ? 'Declined by the client' : '';
-    const preview = img ? '<a href="' + attr(x.url) + '" target="_blank" rel="noopener"><img src="' + attr(x.url) + '" alt=""/></a>'
+    const preview = img ? '<a href="' + attr(x.url) + '" target="_blank" rel="noopener"><img src="' + attr(x.thumbUrl || x.url) + '"' + (x.thumbUrl ? ' data-full="' + attr(x.url) + '" onload="app.V.fvUpgrade(this)"' : '') + ' alt="" decoding="async"/></a>'
       : vid ? '<div class="fv-video-wrap"><video class="fv-video" controls playsinline preload="metadata" src="' + attr(x.url) + '" onerror="app.V.videoFailed(this)"></video>' +
           '<div class="fv-video-fallback hidden"><div class="fv-ext">' + esc((x.name || '').split('.').pop().toUpperCase()) + '</div><div class="small" style="max-width:360px;line-height:1.5;">This browser can\'t play this video format (iPhone HEVC videos play on Safari and most phones, but not on every PC).</div><a class="btn-secondary" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open file</a></div>' +
           '<div class="fv-video-foot"><a class="link" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open in new tab</a></div></div>'
       : '<div class="fv-filetype"><div class="fv-ext">' + esc((x.name || '').split('.').pop().toUpperCase()) + '</div><a class="btn-secondary" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open file</a></div>';
-    let html = '<div class="detail-back" onclick="app.V.closeFile()">&larr; ' + esc(f.name) + '</div>' +
+    let html = '<div class="detail-back" onclick="app.V.closeFile()">&larr; ' + esc(pathLabel(p, x.folderId) || f.name) + '</div>' +
       '<div class="fv">' +
         '<div class="fv-preview' + (vid ? ' is-video' : '') + '">' + preview + '</div>' +
         '<div class="fv-side">' +
           '<div class="fv-title">' + esc(x.name) + '</div>' +
-          '<div class="small">Uploaded by ' + esc(A.memberName(x.uploadedBy)) + ' · ' + A.ago(x.uploadedAt) + (x.size ? ' · ' + fmtSize(x.size) : '') + '</div>' +
+          '<div class="small">Uploaded by ' + esc(A.memberName(x.uploadedBy)) + ' · ' + A.ago(x.uploadedAt) + (x.size ? ' · ' + fmtSize(x.size) : '') + (x.w && x.h ? ' · ' + x.w + '×' + x.h : '') + '</div>' +
+          '<div class="fv-actions"><button class="btn-secondary dl" id="dlBtn" onclick="app.V.downloadFile(\'' + x.id + '\')">' + DL_ICON + 'Download</button><a class="link" href="' + attr(x.url) + '" target="_blank" rel="noopener">Open in new tab</a></div>' +
           '<div class="fv-section"><div class="fv-label">Client portal</div>' +
             '<div class="fv-pub' + (x.shared ? ' on' : '') + '"><div class="fv-pub-text">' + (x.shared ? '<b>Published</b> — the client can see this file in their portal' + (x.sharedAt ? ' (since ' + A.ago(x.sharedAt) + ')' : '') + '.' : '<b>Not published</b> — only the team can see this file.') +
               (st ? '<br><span class="small">' + st + '</span>' : '') + '</div>' +
@@ -186,7 +279,7 @@
               ((c.by === S.me.email || A.isAdmin()) ? '<span class="cm-del" onclick="app.V.deleteComment(\'' + x.id + '\',\'' + c.id + '\')" title="Delete comment">&times;</span>' : '') + '</div><div class="cm-text">' + esc(c.text) + '</div></div>').join('') : '<div class="small" style="padding:6px 0 10px;">No comments yet. Notes here stay inside the team — the client never sees them.</div>') + '</div>' +
             '<div class="cm-new"><textarea id="cmText" rows="2" placeholder="Write a comment for the team…" onkeydown="if((event.metaKey||event.ctrlKey)&&event.key===\'Enter\'){app.V.addComment();}"></textarea><button class="btn-primary" id="cmBtn" onclick="app.V.addComment()">Comment</button></div>' +
           '</div>' +
-          (edit ? '<div class="fv-foot"><span class="link danger" onclick="app.V.deleteFile(\'' + x.id + '\')">Delete this file</span></div>' : '') +
+          (edit ? '<div class="fv-foot"><span class="link" onclick="app.V.moveFileModal(\'' + x.id + '\')">Move to another folder…</span><span class="link danger" style="margin-left:14px;" onclick="app.V.deleteFile(\'' + x.id + '\')">Delete this file</span></div>' : '') +
         '</div></div>';
     return html;
   }
@@ -194,10 +287,51 @@
   const closeFolder = () => { D.folder = null; D.file = null; refresh(); };
   function openFile(id) {
     const x = D.files.find(f => f.id === id); if (!x) return;
-    D.folder = x.folderId; D.file = id; refresh();
+    D.folder = x.folderId; D.file = id;
+    const view = $('view'); let stage = document.getElementById('folderStage');
+    const grid = view && view.querySelector('.file-grid'), fsOld = document.getElementById('fileStage');
+    if (!fsOld && view && (stage || grid)) {
+      // keep the folder we came from on the page (hidden) and lay the viewer over it — nothing reloads on the way back
+      if (!stage) {
+        stage = document.createElement('div'); stage.id = 'folderStage';
+        const tabsEl = view.querySelector('.detail-tabs'); let after = false;
+        [...view.children].forEach(k => { if (after) stage.appendChild(k); if (k === tabsEl) after = true; });
+        view.appendChild(stage);
+      }
+      D.scrollBack = window.scrollY; stage.classList.add('hidden');
+      const fs = document.createElement('div'); fs.id = 'fileStage'; fs.innerHTML = fileView(id, A.canEditProject(project()));
+      view.appendChild(fs); window.scrollTo(0, 0);
+      // decode the hidden thumbnails now, while the person is looking at the file, so going back paints at once
+      if (window.requestIdleCallback) requestIdleCallback(() => stage.querySelectorAll('img').forEach(i => { if (i.decode) i.decode().catch(() => { }); }));
+    } else refresh();
     markSeen(x);
   }
-  const closeFile = () => { D.file = null; refresh(); };
+  function closeFile() {
+    D.file = null;
+    const stage = document.getElementById('folderStage'), fs = document.getElementById('fileStage');
+    if (stage && fs) { fs.remove(); stage.classList.remove('hidden'); if (D.scrollBack != null) { window.scrollTo(0, D.scrollBack); D.scrollBack = null; } }
+    else refresh();
+  }
+  function moveFileModal(id) {
+    const p = project(), x = D.files.find(f => f.id === id); if (!x) return;
+    const opts = foldersOf(p).filter(f => f.id !== x.folderId).map(f => '<option value="' + attr(f.id) + '">' + esc(pathLabel(p, f.id)) + '</option>').join('');
+    A.openModal('<div class="drawer-head"><div class="member-name">Move “' + esc(x.name) + '”</div></div><div class="drawer-body">' +
+      '<div class="fld"><label>Move to</label><select id="mvFolder">' + opts + '</select></div>' +
+      '<div class="fld-hint">Now in: ' + esc(pathLabel(p, x.folderId)) + '. Comments and the client-portal setting travel with the file.</div></div>' +
+      '<div class="drawer-foot"><button class="btn-secondary" onclick="app.closeModal()">Cancel</button><button class="btn-primary" onclick="app.V.moveFile(\'' + x.id + '\', document.getElementById(\'mvFolder\').value)">Move</button></div>');
+  }
+  function moveFile(id, toId) {
+    const p = project(), x = D.files.find(f => f.id === id), to = folderById(p, toId); if (!x || !to || toId === x.folderId) { A.closeModal(); return; }
+    const from = pathLabel(p, x.folderId);
+    const patch = { folderId: toId };
+    if (rootOf(p, toId) === '2d' && !x.status) patch.status = 'awaiting';      // a picture moved into the drawings folder needs the client's approval
+    Object.assign(x, patch); A.closeModal();
+    D.folder = toId; D.file = null; refresh();   // land in the destination folder
+    A.bg(A.col('projects').doc(p.id).collection('files').doc(id).update(patch), 'move file');
+    A.logActivity(p, x.name + ' moved from ' + from + ' to ' + pathLabel(p, toId), 'file');
+    if (x.shared) syncPortal(p);
+    A.toast('Moved to ' + to.name);
+  }
   async function markSeen(x) {   // remember that I have seen the latest comments (clears the "new" badge on every device)
     if (!x.lastCommentAt) return;
     const key = seenKey(S.me.email), now = A.nowISO();
@@ -237,21 +371,26 @@
     Object.assign(x, patch); refresh(); A.toast(on ? 'Published — the client can now see it' : 'Unpublished');
     A.bg(A.col('projects').doc(p.id).collection('files').doc(id).update(patch), on ? 'publish' : 'unpublish');
     A.logActivity(p, x.name + (on ? ' published to the client portal' : ' removed from the client portal'), 'file');
-    if (on) clientNote(p, (x.folderId === '2d' ? 'New drawing for your approval: ' : 'New file shared with you: ') + x.name, x.folderId === '2d' ? 'approval' : 'file');
+    if (on) clientNote(p, (inElev(x) ? 'New drawing for your approval: ' : 'New file shared with you: ') + x.name, inElev(x) ? 'approval' : 'file');
     syncPortal(p);
   }
   function startNewFolder() { $('addFolderCard').classList.add('hidden'); $('newFolderForm').classList.remove('hidden'); setTimeout(() => { const el = $('newFolderName'); if (el) el.focus(); }, 50); }
   function cancelNewFolder() { $('newFolderForm').classList.add('hidden'); $('addFolderCard').classList.remove('hidden'); }
-  async function createFolder() {
+  async function createFolder(parentId) {
     const name = ($('newFolderName').value || '').trim(); if (!name) return;
-    const p = project(); const folders = (p.folders || []).concat([{ id: 'f' + A.uid(), name }]);
-    await A.saveProject(p, { folders }); await A.logActivity(p, 'Folder created: ' + name, 'file'); refresh();
+    const p = project(); const f = { id: 'f' + A.uid(), name }; if (parentId && folderById(p, parentId)) f.parentId = parentId;
+    const folders = foldersOf(p).concat([f]);
+    await A.saveProject(p, { folders }); await A.logActivity(p, (f.parentId ? 'Subfolder created: ' + pathLabel(p, f.id) : 'Folder created: ' + name), 'file'); refresh();
   }
   function deleteFolder(fid) {
-    const p = project(); const f = p.folders.find(x => x.id === fid); const n = D.files.filter(x => x.folderId === fid).length;
-    A.confirmBox('Delete folder "' + f.name + '"?', n ? 'It contains ' + n + ' file(s). They will be deleted too.' : 'The folder is empty.', 'Delete', async () => {
-      for (const x of D.files.filter(x => x.folderId === fid)) await removeFileDoc(x);
-      await A.saveProject(p, { folders: p.folders.filter(x => x.id !== fid) }); D.folder = null; refresh();
+    const p = project(); const f = folderById(p, fid); if (!f) return;
+    const ids = subtree(p, fid), files = filesDeep(p, fid), subs = ids.length - 1;
+    const what = [files.length ? files.length + (files.length === 1 ? ' file' : ' files') : '', subs ? subs + (subs === 1 ? ' subfolder' : ' subfolders') : ''].filter(Boolean).join(' and ');
+    A.confirmBox('Delete folder "' + f.name + '"?', what ? 'It contains ' + what + '. They will be deleted too.' : 'The folder is empty.', 'Delete', async () => {
+      for (const x of files) await removeFileDoc(x);
+      const keep = new Set(ids);
+      await A.saveProject(p, { folders: foldersOf(p).filter(x => !keep.has(x.id)) }); await A.logActivity(p, 'Folder deleted: ' + f.name, 'file');
+      D.folder = f.parentId && folderById(p, f.parentId) ? f.parentId : null; D.file = null; refresh();
     }, true);
   }
   async function uploadFiles(list) {
@@ -261,10 +400,13 @@
     for (const file of files) {
       i++; st.textContent = 'Uploading ' + i + ' of ' + files.length + ': ' + file.name;
       const path = 'projects/' + p.id + '/' + D.folder + '/' + Date.now() + '_' + file.name.replace(/[^\w.\-]+/g, '_');
-      const task = A.storage().ref(path).put(file);
+      const task = A.storage().ref(path).put(file, { cacheControl: CACHE_LONG });
       await new Promise((res, rej) => task.on('state_changed', s => { bar.style.width = Math.round(s.bytesTransferred / s.totalBytes * 100) + '%'; }, rej, res));
       const url = await task.snapshot.ref.getDownloadURL();
-      const doc = { folderId: D.folder, name: file.name, path, url, size: file.size, uploadedBy: S.me.email, uploadedAt: A.nowISO(), status: D.folder === '2d' ? 'awaiting' : null, shared: false };
+      const doc = { folderId: D.folder, name: file.name, path, url, size: file.size, uploadedBy: S.me.email, uploadedAt: A.nowISO(), status: rootOf(p, D.folder) === '2d' ? 'awaiting' : null, shared: false };
+      if (isImage({ name: file.name })) {      // small preview made on this device, so the folder opens instantly for everyone
+        try { const t = await makeThumb(file); doc.thumbUrl = await uploadThumb(path, t.blob); doc.w = t.w; doc.h = t.h; } catch (e) { A.dlog('thumb', 'no thumbnail for ' + file.name + ': ' + (e.message || e)); }
+      }
       const ref = await A.col('projects').doc(p.id).collection('files').add(doc);
       D.files.push({ id: ref.id, ...doc });
     }
@@ -275,6 +417,7 @@
     D.files = D.files.filter(f => f.id !== x.id);
     A.bg(A.col('projects').doc(project().id).collection('files').doc(x.id).delete(), 'file delete');
     A.storage().ref(x.path).delete().catch(() => { /* already gone */ });
+    if (x.thumbUrl) A.storage().ref(x.path + '.thumb.jpg').delete().catch(() => { });
     return Promise.resolve();
   }
   function deleteFile(id) {
@@ -410,7 +553,7 @@
       if (f) { await A.col('projects').doc(p.id).collection('files').doc(f.id).update({ status: pl.decision === 'approved' ? 'approved' : 'declined' }); f.status = pl.decision === 'approved' ? 'approved' : 'declined'; }
       await A.logActivity(p, 'Client ' + (pl.decision === 'approved' ? 'approved ' : 'declined ') + (f ? f.name : 'an elevation') + (pl.comment ? ' — "' + pl.comment + '"' : ''), 'client');
       if (f) clientNote(p, (pl.decision === 'approved' ? 'You approved ' : 'You asked for changes to ') + f.name, pl.decision === 'approved' ? 'approved' : 'info');
-      const shared = D.files.filter(x => x.shared && x.folderId === '2d');
+      const shared = D.files.filter(x => x.shared && inElev(x));
       if (shared.length && shared.every(x => x.status === 'approved') && p.waiting && /elevation/i.test(p.waiting)) await A.saveProject(p, { waiting: null, waitingSince: null });
     } else if (r.type === 'checklist' && p.checklist) {
       (pl.sections || []).forEach(s => { const t = p.checklist.sections.find(x => x.n === s.n); if (t) { t.choice = s.choice || ''; t.note = s.note || ''; t.custom = !!s.custom; } });
@@ -633,7 +776,7 @@
     const q = p.quote && p.quote.status !== 'draft' ? { number: p.quote.number, version: p.quote.version, status: p.quote.status, validUntil: p.quote.validUntil, duration: p.quote.duration, items: p.quote.items, discount: p.quote.discount, depositPct: p.quote.depositPct, balanceTerms: p.quote.balanceTerms, included: p.quote.included, excluded: p.quote.excluded, note: p.quote.note || '', totals: qTotals(p.quote) } : null;
     const snap = {
       projectId: p.id, company: A.CFG.companyName || 'RUF', client: p.client, products: p.products || [], description: p.description || '', stage: p.status === 'done' ? 4 : (p.stage || 0), status: p.status,
-      files: (D.project && D.project.id === p.id ? D.files : []).filter(f => f.shared).map(f => ({ id: f.id, name: f.name, url: f.url, folder: (p.folders.find(x => x.id === f.folderId) || {}).name || '', status: f.status || null, isElevation: f.folderId === '2d' })),
+      files: (D.project && D.project.id === p.id ? D.files : []).filter(f => f.shared).map(f => ({ id: f.id, name: f.name, url: f.url, thumbUrl: f.thumbUrl || null, folder: pathLabel(p, f.folderId) || '', status: f.status || null, isElevation: rootOf(p, f.folderId) === '2d' })),
       checklist: p.checklist && p.checklist.sentAt ? { sections: p.checklist.sections, options: p.checklist.options || A.CHECKLIST_OPTIONS, deadline: p.checklist.deadline, clientConfirmedAt: p.checklist.clientConfirmedAt, teamConfirmedAt: p.checklist.teamConfirmedAt } : null,
       quote: q, updatedAt: A.nowISO(),
       start: p.start || null, handover: p.handover || null, phases: p.phases || null,
@@ -649,7 +792,7 @@
       '<div class="drawer-foot"><button class="btn-secondary" onclick="app.closeModal()">Close</button><a class="btn-primary" style="text-decoration:none;" href="https://wa.me/' + attr((p.phone || '').replace(/[^\d]/g, '')) + '?text=' + encodeURIComponent('Hello ' + p.client + ', please open your ' + (A.CFG.companyName || 'RUF') + ' project page: ' + link) + '" target="_blank" rel="noopener">Open in WhatsApp</a></div>');
   }
 
-  Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile, videoFailed,
+  Object.assign(A.V, { openDetail, refresh, nextStage, waitingModal, setWaiting, openFolder, closeFolder, startNewFolder, cancelNewFolder, createFolder, deleteFolder, uploadFiles, deleteFile, setFileStatus, toggleShare, openFile, closeFile, addComment, deleteComment, publishFile, videoFailed, fvUpgrade, downloadFile, moveFileModal, moveFile,
     createChecklist, clEdit, clChoice, clAddSection, clRemoveSection, clDeadline, saveChecklist, sendChecklist, confirmChecklist, cancelChecklist, applyResponse, dismissResponse, decideChange, phaseChanged, toggleGroup, renderProjectGantt,
     qSet, qValid, qItem, qAdd, qRemove, qCalc, qSave, qSend, qNewVersion, qPrint, saveSettings, newPortalLink, deleteProject, reopenProject, syncPortal, portalLink });
 })();
