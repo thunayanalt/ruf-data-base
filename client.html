@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <meta name="theme-color" content="#F6F4EF">
-<link rel="stylesheet" href="css/app.css?v=2026.11.17c">
+<link rel="stylesheet" href="css/app.css?v=2026.11.18">
 <style>
   body { display: block; background: var(--bg); }
   .cp { max-width: 860px; margin: 0 auto; padding: 22px 18px 70px; }
@@ -186,7 +186,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="js/config.js?v=2026.11.17c"></script>
+  <script src="js/config.js?v=2026.11.18"></script>
   <script>
   (() => {
     const CFG = window.RUF_CONFIG; firebase.initializeApp(CFG.firebase); const db = firebase.firestore();
@@ -324,7 +324,7 @@
 
       // approved & locked
       const approvedItems = [];
-      elevApproved.forEach(f => approvedItems.push({ kind: 'file', id: f.id, label: f.name, sub: 'Drawing · approved', thumb: /\.(png|jpe?g|gif|webp)$/i.test(f.name) ? f.url : null, url: f.url }));
+      elevApproved.forEach(f => approvedItems.push({ kind: 'file', id: f.id, label: f.name, sub: 'Drawing · approved', thumb: /\.(png|jpe?g|gif|webp)$/i.test(f.name) ? (f.thumbUrl || f.url) : null, url: f.url }));
       if (clLocked) approvedItems.push({ kind: 'checklist', id: 'checklist', label: 'Section checklist', sub: 'Confirmed on ' + fmt(c.clientConfirmedAt || c.teamConfirmedAt) + ' · in production', sections: c.sections });
       if (qLocked) approvedItems.push({ kind: 'quote', id: q.number, label: 'Quotation ' + q.number, sub: 'Version ' + q.version + ' · ' + kwd(q.totals.total) + ' · accepted' });
       if (approvedItems.length || crs.length) {
@@ -358,7 +358,7 @@
       const st = f.status === 'approved' ? 'You approved this' : f.status === 'declined' ? 'You asked for changes' : f.status === 'awaiting' ? 'Waiting for your approval' : '';
       const ext = esc(f.name.split('.').pop().toUpperCase());
       const thumb = vid ? '<a class="cp-thumb video" href="' + esc(f.url) + '" onclick="return playVideo(\'' + esc(f.id) + '\', this.href)" title="Play">' + PLAY_ICON + ext + '</a>'
-        : '<a class="cp-thumb" href="' + esc(f.url) + '" target="_blank" rel="noopener">' + (img ? '<img src="' + esc(f.url) + '" alt=""/>' : ext) + '</a>';
+        : '<a class="cp-thumb" href="' + esc(f.url) + '" target="_blank" rel="noopener">' + (img ? '<img src="' + esc(f.thumbUrl || f.url) + '" alt="" loading="lazy" decoding="async"/>' : ext) + '</a>';
       return '<div class="cp-file">' + thumb + '<div><div class="cp-file-name"><a href="' + esc(f.url) + '"' + (vid ? ' onclick="return playVideo(\'' + esc(f.id) + '\', this.href)"' : ' target="_blank" rel="noopener"') + ' style="color:inherit;text-decoration:none;">' + esc(f.name) + '</a></div><div class="cp-file-sub">' + esc(f.folder) + (st ? ' · ' + st : '') + (vid ? ' · tap to watch' : '') + '</div></div>' +
         (approvable && f.status !== 'approved' && !done['f_' + f.id] ? '<div class="cp-actions"><button class="btn-secondary" style="height:32px;font-size:12.5px;" onclick="askChanges(\'' + esc(f.id) + '\')">Ask for changes</button><button class="btn-primary" style="height:32px;font-size:12.5px;" onclick="fileDecision(\'' + esc(f.id) + '\',\'approved\')">Approve</button></div>' : (done['f_' + f.id] ? '<div class="cp-actions"><span class="cl-pill filled">Sent</span></div>' : '')) +
         (vid ? '<div class="cp-player" id="vp_' + esc(f.id) + '" style="display:none;"></div>' : '') + '</div>';
